@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 專案作品集 | 精選互動應用整合平台</title>
+  <meta name="description" content="AI 專案作品集 - 整合喝水追蹤、個資假名化、歐洲地圖、瑜珈代課、台北天氣與台灣抹茶地圖等精選互動工具。" />
+
+  <!-- Google Fonts: Inter & Plus Jakarta Sans & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <style>
+    /* ==========================================================================
+       CSS Variables & Design Tokens
+       ========================================================================== */
+    :root {
+      --font-main: 'Plus Jakarta Sans', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+      
+      /* Dark Theme (Default) */
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-card-hover: rgba(30, 41, 59, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(99, 102, 241, 0.4);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --header-bg: rgba(9, 13, 22, 0.8);
+      --search-bg: rgba(15, 23, 42, 0.6);
+      --chip-bg: rgba(255, 255, 255, 0.05);
+      --chip-active-bg: linear-gradient(135deg, #6366f1, #8b5cf6);
+      --chip-active-text: #ffffff;
+      --modal-bg: #0f172a;
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    html.light {
+      --bg-base: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-card: rgba(255, 255, 255, 0.85);
+      --bg-card-hover: #ffffff;
+      --border-color: rgba(226, 232, 240, 0.8);
+      --border-hover: rgba(99, 102, 241, 0.5);
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent-glow: rgba(99, 102, 241, 0.08);
+      --header-bg: rgba(248, 250, 252, 0.85);
+      --search-bg: rgba(255, 255, 255, 0.9);
+      --chip-bg: rgba(0, 0, 0, 0.04);
+      --chip-active-bg: linear-gradient(135deg, #4f46e5, #7c3aed);
+      --chip-active-text: #ffffff;
+      --modal-bg: #ffffff;
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+      transition: background-color 0.3s ease, color 0.3s ease;
+      position: relative;
+    }
+
+    /* Ambient Background Glows */
+    .ambient-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .ambient-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.35;
+      animation: floatOrb 20s infinite alternate ease-in-out;
+    }
+
+    .orb-1 {
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, #6366f1, #3b82f6);
+      top: -100px;
+      left: -100px;
+    }
+
+    .orb-2 {
+      width: 450px;
+      height: 450px;
+      background: radial-gradient(circle, #ec4899, #8b5cf6);
+      top: 30%;
+      right: -100px;
+      animation-delay: -5s;
+    }
+
+    .orb-3 {
+      width: 550px;
+      height: 550px;
+      background: radial-gradient(circle, #06b6d4, #10b981);
+      bottom: -150px;
+      left: 20%;
+      animation-delay: -10s;
+    }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(60px, 40px) scale(1.08); }
+      100% { transform: translate(-40px, 80px) scale(0.95); }
+    }
+
+    /* ==========================================================================
+       Layout & Container
+       ========================================================================== */
+    .app-layout {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem 1.5rem;
+    }
+
+    /* Top Navigation Bar */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background-color: var(--header-bg);
+      border-bottom: 1px solid var(--border-color);
+      margin: 0 -1.5rem 2.5rem -1.5rem;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s ease;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 800;
+      font-size: 1.25rem;
+      text-decoration: none;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .brand-icon-wrapper {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.1rem;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+      position: relative;
+    }
+
+    .brand-icon-wrapper::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #6366f1, #ec4899);
+      z-index: -1;
+      opacity: 0.6;
+      filter: blur(4px);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .theme-toggle-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.05rem;
+      transition: all 0.2s ease;
+    }
+
+    .theme-toggle-btn:hover {
+      background: var(--border-color);
+      transform: translateY(-1px);
+    }
+
+    /* Hero Section */
+    .hero-section {
+      text-align: center;
+      padding: 2.5rem 1rem 3rem 1rem;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      color: #818cf8;
+      margin-bottom: 1.25rem;
+      backdrop-filter: blur(8px);
+    }
+
+    html.light .hero-badge {
+      color: #4f46e5;
+      background: rgba(79, 70, 229, 0.08);
+      border-color: rgba(79, 70, 229, 0.2);
+    }
+
+    .hero-title {
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #f43f5e 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    /* Stats Ribbon */
+    .stats-ribbon {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-icon {
+      font-size: 1.1rem;
+      color: #6366f1;
+    }
+
+    .stat-text {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: 0.2rem;
+    }
+
+    /* ==========================================================================
+       Filter & Search Toolbar
+       ========================================================================== */
+    .controls-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2.5rem;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 260px;
+      position: relative;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 1.1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 0.75rem 1rem 0.75rem 2.8rem;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--search-bg);
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .search-clear:hover {
+      color: var(--text-primary);
+    }
+
+    .filter-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .filter-btn {
+      padding: 0.45rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
+    }
+
+    .filter-btn.active {
+      background: var(--chip-active-bg);
+      color: var(--chip-active-text);
+      border-color: transparent;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    }
+
+    .items-count {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-weight: 500;
+    }
+
+    /* ==========================================================================
+       Projects Grid & Card Design
+       ========================================================================== */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 2rem;
+    }
+
+    .project-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                  box-shadow 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                  border-color 0.3s ease;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow-card);
+      position: relative;
+    }
+
+    .project-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--card-accent, #6366f1);
+      box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.3), 
+                  0 0 25px -5px var(--card-glow, rgba(99, 102, 241, 0.2));
+    }
+
+    /* Top Accent Stripe */
+    .card-accent-bar {
+      height: 4px;
+      width: 100%;
+      background: var(--card-gradient, linear-gradient(90deg, #6366f1, #8b5cf6));
+    }
+
+    /* Card Banner Header */
+    .card-banner {
+      padding: 1.5rem 1.5rem 1rem 1.5rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .card-icon-box {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      color: #ffffff;
+      background: var(--card-gradient, linear-gradient(135deg, #6366f1, #a855f7));
+      box-shadow: 0 6px 16px var(--card-glow, rgba(99, 102, 241, 0.3));
+      flex-shrink: 0;
+      transition: transform 0.3s ease;
+    }
+
+    .project-card:hover .card-icon-box {
+      transform: scale(1.08) rotate(3deg);
+    }
+
+    .card-category-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      background: var(--chip-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Card Body */
+    .card-body {
+      padding: 0 1.5rem 1.25rem 1.5rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-title {
+      font-size: 1.28rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+      color: var(--text-primary);
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+    }
+
+    .card-desc {
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 1.25rem;
+      flex: 1;
+    }
+
+    /* Key Features List */
+    .card-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 1.25rem;
+      padding: 0.75rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+    }
+
+    html.light .card-features {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .card-feature-item {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-feature-item i {
+      font-size: 0.75rem;
+      color: var(--card-accent, #6366f1);
+    }
+
+    /* Tech Stack Tags */
+    .card-tech-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .tech-tag {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      background: var(--chip-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+    }
+
+    /* Card Footer / Actions */
+    .card-footer {
+      padding: 1rem 1.5rem 1.5rem 1.5rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .btn-launch {
+      flex: 1;
+      padding: 0.8rem 1.2rem;
+      border-radius: 12px;
+      background: var(--card-gradient, linear-gradient(135deg, #6366f1, #8b5cf6));
+      color: #ffffff;
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: inherit;
+      border: none;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      box-shadow: 0 4px 15px var(--card-glow, rgba(99, 102, 241, 0.35));
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .btn-launch:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px var(--card-glow, rgba(99, 102, 241, 0.5));
+      filter: brightness(1.08);
+    }
+
+    .btn-launch i {
+      transition: transform 0.2s ease;
+    }
+
+    .btn-launch:hover i {
+      transform: translateX(3px);
+    }
+
+    .btn-preview {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .btn-preview:hover {
+      background: var(--border-color);
+      color: var(--text-primary);
+      transform: translateY(-2px);
+    }
+
+    /* Empty state */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 4rem 1rem;
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px dashed var(--border-color);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .empty-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-desc {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    /* ==========================================================================
+       Interactive Preview Modal
+       ========================================================================== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-container {
+      width: 100%;
+      max-width: 1200px;
+      height: 88vh;
+      background: var(--modal-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      transform: scale(0.96) translateY(20px);
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .modal-overlay.active .modal-container {
+      transform: scale(1) translateY(0);
+    }
+
+    .modal-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--header-bg);
+    }
+
+    .modal-title-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .modal-title-icon {
+      font-size: 1.25rem;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .modal-btn {
+      padding: 0.45rem 0.9rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .modal-btn:hover {
+      background: var(--border-color);
+    }
+
+    .modal-btn-close {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .modal-btn-close:hover {
+      background: #ef4444;
+      color: white;
+      border-color: #ef4444;
+    }
+
+    .modal-iframe-wrapper {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      background: #ffffff;
+    }
+
+    .modal-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* ==========================================================================
+       Footer
+       ========================================================================== */
+    .app-footer {
+      margin-top: 5rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-link {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+      font-weight: 500;
+    }
+
+    .footer-link:hover {
+      color: #6366f1;
+    }
+
+    /* Scroll to Top Button */
+    .scroll-top-btn {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
+      transition: all 0.25s ease;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      z-index: 40;
+    }
+
+    .scroll-top-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .scroll-top-btn:hover {
+      background: #6366f1;
+      color: white;
+      border-color: #6366f1;
+    }
+
+    /* ==========================================================================
+       Responsive Media Queries
+       ========================================================================== */
+    @media (max-width: 768px) {
+      .hero-title {
+        font-size: 2.2rem;
+      }
+      .projects-grid {
+        grid-template-columns: 1fr;
+      }
+      .top-nav {
+        padding: 0.85rem 1.25rem;
+      }
+      .controls-panel {
+        padding: 1rem;
+      }
+      .filter-tags {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.3rem;
+        flex-wrap: nowrap;
+      }
+      .filter-btn {
+        white-space: nowrap;
+      }
+      .modal-container {
+        height: 94vh;
+        border-radius: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Light Blobs -->
+  <div class="ambient-bg" aria-hidden="true">
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    <div class="ambient-orb orb-3"></div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-icon-wrapper">
+          <i class="fa-solid fa-shapes"></i>
+        </div>
+        <span>AI Portfolio</span>
+      </a>
+
+      <div class="nav-actions">
+        <button id="themeToggleBtn" class="theme-toggle-btn" title="切換深淺色主題" aria-label="切換主題">
+          <i class="fa-solid fa-sun" id="themeIcon"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="hero-badge">
+        <i class="fa-solid fa-sparkles"></i>
+        <span>AI Powered Applications & Interactive Tools</span>
+      </div>
+      <h1 class="hero-title">
+        <span class="gradient-text">AI 專案作品集</span>
+      </h1>
+      <p class="hero-desc">
+        精選多領域智慧互動工具與獨立應用，涵蓋生活健康、資料防護、地圖導覽、即時天氣與媒合平台，點擊即可立即體驗。
+      </p>
+
+      <!-- Stat Badges -->
+      <div class="stats-ribbon">
+        <div class="stat-item">
+          <i class="fa-solid fa-layer-group stat-icon" style="color: #6366f1;"></i>
+          <span class="stat-text">6 款精選工具</span>
+          <span class="stat-sub">即點即用</span>
+        </div>
+        <div class="stat-item">
+          <i class="fa-solid fa-bolt stat-icon" style="color: #f59e0b;"></i>
+          <span class="stat-text">100% 離線即時</span>
+          <span class="stat-sub">極速加載</span>
+        </div>
+        <div class="stat-item">
+          <i class="fa-solid fa-mobile-screen-button stat-icon" style="color: #10b981;"></i>
+          <span class="stat-text">全響應式 RWD</span>
+          <span class="stat-sub">跨裝置支援</span>
+        </div>
+        <div class="stat-item">
+          <i class="fa-solid fa-shield-halved stat-icon" style="color: #06b6d4;"></i>
+          <span class="stat-text">純前端安全</span>
+          <span class="stat-sub">隱私無虞</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls Panel (Search & Filter) -->
+    <section class="controls-panel">
+      <div class="search-row">
+        <div class="search-box">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input 
+            type="text" 
+            id="searchInput" 
+            class="search-input" 
+            placeholder="搜尋工具名稱、功能特點或技術標籤（例如：地圖、天氣、個資...）" 
+            autocomplete="off"
+          />
+          <button id="searchClearBtn" class="search-clear" title="清除搜尋">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="filter-tags">
+        <button class="filter-btn active" data-category="all">
+          <i class="fa-solid fa-border-all"></i> 全部專案
+        </button>
+        <button class="filter-btn" data-category="map">
+          <i class="fa-solid fa-map-location-dot"></i> 地圖導覽
+        </button>
+        <button class="filter-btn" data-category="health">
+          <i class="fa-solid fa-heart-pulse"></i> 健康習慣
+        </button>
+        <button class="filter-btn" data-category="utility">
+          <i class="fa-solid fa-screwdriver-wrench"></i> 實用工具
+        </button>
+        <button class="filter-btn" data-category="platform">
+          <i class="fa-solid fa-users-viewfinder"></i> 媒合系統
+        </button>
+
+        <span class="items-count" id="itemsCount">顯示 6 個專案</span>
+      </div>
+    </section>
+
+    <!-- Projects Cards Grid -->
+    <main class="projects-grid" id="projectsGrid">
+
+      <!-- Card 1: 每日喝水追蹤與紀錄 -->
+      <article 
+        class="project-card" 
+        data-category="health" 
+        data-keywords="每日喝水 飲水 追蹤 紀錄 水分計算 波浪動畫 習慣 daily water tracker tailwind"
+        style="
+          --card-accent: #0284c7;
+          --card-glow: rgba(2, 132, 199, 0.28);
+          --card-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+        "
+      >
+        <div class="card-accent-bar"></div>
+        <div class="card-banner">
+          <div class="card-icon-box">
+            <i class="fa-solid fa-droplet"></i>
+          </div>
+          <span class="card-category-badge">健康習慣</span>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title">每日喝水追蹤與紀錄</h2>
+          <p class="card-desc">
+            根據個人體重與活動量智慧計算每日目標，提供擬真動態注水波浪水位動畫、多種飲品快速記錄與歷史數據統計圖表。
+          </p>
+
+          <ul class="card-features">
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>客製化個人建議飲水量試算</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>動態波浪水位即時上升視覺動畫</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>LocalStorage 本地歷史日誌存檔</span>
+            </li>
+          </ul>
+
+          <div class="card-tech-tags">
+            <span class="tech-tag">Tailwind CSS</span>
+            <span class="tech-tag">Wave Animation</span>
+            <span class="tech-tag">LocalStorage</span>
+            <span class="tech-tag">Responsive UI</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <a href="daily_water_tracker.html" class="btn-launch">
+            <span>開啟應用</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button 
+            class="btn-preview open-modal-btn" 
+            data-url="daily_water_tracker.html" 
+            data-title="每日喝水追蹤與紀錄"
+            data-icon="fa-droplet"
+            title="彈窗快速預覽"
+            aria-label="快速預覽每日喝水追蹤與紀錄"
+          >
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </article>
+
+      <!-- Card 2: 個資假名化工具 -->
+      <article 
+        class="project-card" 
+        data-category="utility" 
+        data-keywords="個資 假名化 脫敏 資料保護 安全 csv excel papaparse sheetjs privacy data pseudonymization"
+        style="
+          --card-accent: #6366f1;
+          --card-glow: rgba(99, 102, 241, 0.28);
+          --card-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+        "
+      >
+        <div class="card-accent-bar"></div>
+        <div class="card-banner">
+          <div class="card-icon-box">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <span class="card-category-badge">實用工具</span>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title">個資假名化工具</h2>
+          <p class="card-desc">
+            企業與研究必備的離線資料脫敏工具。支援 CSV/Excel 表格上傳，提供姓名、身分證、電話、Email 等多種去識別化規則，隱私 100% 不外洩。
+          </p>
+
+          <ul class="card-features">
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>純前端離線運算，數據不上傳伺服器</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>自訂各欄位假名化規則與雜湊對應</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>即時前後對照預覽與一鍵批次匯出</span>
+            </li>
+          </ul>
+
+          <div class="card-tech-tags">
+            <span class="tech-tag">PapaParse</span>
+            <span class="tech-tag">SheetJS (xlsx)</span>
+            <span class="tech-tag">Crypto Hash</span>
+            <span class="tech-tag">100% 本地安全</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <a href="data_pseudonymization.html" class="btn-launch">
+            <span>開啟應用</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button 
+            class="btn-preview open-modal-btn" 
+            data-url="data_pseudonymization.html" 
+            data-title="個資假名化工具"
+            data-icon="fa-shield-halved"
+            title="彈窗快速預覽"
+            aria-label="快速預覽個資假名化工具"
+          >
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </article>
+
+      <!-- Card 3: 歐洲旅遊景點互動地圖 -->
+      <article 
+        class="project-card" 
+        data-category="map" 
+        data-keywords="歐洲 旅遊 景點 互動地圖 leaflet 地理 導覽 巴黎 羅馬 倫敦 旅行 map european tourist attractions"
+        style="
+          --card-accent: #f59e0b;
+          --card-glow: rgba(245, 158, 11, 0.28);
+          --card-gradient: linear-gradient(135deg, #f59e0b 0%, #f43f5e 100%);
+        "
+      >
+        <div class="card-accent-bar"></div>
+        <div class="card-banner">
+          <div class="card-icon-box">
+            <i class="fa-solid fa-earth-europe"></i>
+          </div>
+          <span class="card-category-badge">地圖導覽</span>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title">歐洲旅遊景點互動地圖</h2>
+          <p class="card-desc">
+            視覺化探索歐洲各國精選著名地標與歷史古蹟。整合 Leaflet.js 互動地圖圖資、多國景點分類篩選、星級評分與圖文並茂的深度導覽。
+          </p>
+
+          <ul class="card-features">
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>Leaflet 高效平滑縮放與圖層互動</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>側邊欄景點清單連動地圖 Marker 定位</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>景點照片、評分、開放時間與詳細介紹</span>
+            </li>
+          </ul>
+
+          <div class="card-tech-tags">
+            <span class="tech-tag">Leaflet.js</span>
+            <span class="tech-tag">OpenStreetMap</span>
+            <span class="tech-tag">GIS Interactive</span>
+            <span class="tech-tag">RWD 側邊導航</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <a href="european_tourist_attractions_map.html" class="btn-launch">
+            <span>開啟應用</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button 
+            class="btn-preview open-modal-btn" 
+            data-url="european_tourist_attractions_map.html" 
+            data-title="歐洲旅遊景點互動地圖"
+            data-icon="fa-earth-europe"
+            title="彈窗快速預覽"
+            aria-label="快速預覽歐洲旅遊景點互動地圖"
+          >
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </article>
+
+      <!-- Card 4: 瑜珈教練代課系統 -->
+      <article 
+        class="project-card" 
+        data-category="platform" 
+        data-keywords="瑜珈 教練 代課 系統 react babel 運動 排班 媒合 聊天 評價 yoga teacher substitution"
+        style="
+          --card-accent: #ec4899;
+          --card-glow: rgba(236, 72, 153, 0.28);
+          --card-gradient: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+        "
+      >
+        <div class="card-accent-bar"></div>
+        <div class="card-banner">
+          <div class="card-icon-box">
+            <i class="fa-solid fa-spa"></i>
+          </div>
+          <span class="card-category-badge">媒合系統</span>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title">瑜珈教練代課系統</h2>
+          <p class="card-desc">
+            以 React 18 全功能打造的瑜珈老師與教室代課媒合平台。具備代課發案、教練應徵、排班日曆管理、即時私訊對話與評分反饋機制。
+          </p>
+
+          <ul class="card-features">
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>React 18 狀態驅動的 SPA 應用架構</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>發案 / 應徵 / 排班日曆全生命週期管理</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>即時模擬對話私訊與教練評星系統</span>
+            </li>
+          </ul>
+
+          <div class="card-tech-tags">
+            <span class="tech-tag">React 18</span>
+            <span class="tech-tag">Babel Standalone</span>
+            <span class="tech-tag">Tailwind CSS</span>
+            <span class="tech-tag">SPA Workflow</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <a href="sub_teacher.html" class="btn-launch">
+            <span>開啟應用</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button 
+            class="btn-preview open-modal-btn" 
+            data-url="sub_teacher.html" 
+            data-title="瑜珈教練代課系統"
+            data-icon="fa-spa"
+            title="彈窗快速預覽"
+            aria-label="快速預覽瑜珈教練代課系統"
+          >
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </article>
+
+      <!-- Card 5: 台北即時天氣 Dashboard -->
+      <article 
+        class="project-card" 
+        data-category="utility" 
+        data-keywords="台北 天氣 氣象 儀表板 dashboard 降雨 氣溫 紫外線 空氣品質 glassmorphism taipei weather"
+        style="
+          --card-accent: #0284c7;
+          --card-glow: rgba(2, 132, 199, 0.28);
+          --card-gradient: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+        "
+      >
+        <div class="card-accent-bar"></div>
+        <div class="card-banner">
+          <div class="card-icon-box">
+            <i class="fa-solid fa-cloud-sun-rain"></i>
+          </div>
+          <span class="card-category-badge">實用工具</span>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title">台北即時天氣 Dashboard</h2>
+          <p class="card-desc">
+            台北市各行政區即時天氣資訊儀表板。採用現代極簡玻璃擬態 (Glassmorphism) 設計，呈現溫度、濕度、紫外線、降雨機率與未來多日天氣趨勢。
+          </p>
+
+          <ul class="card-features">
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>高質感玻璃擬態 (Glassmorphism) 視覺效果</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>台北各行政區即時氣溫與舒適度切換</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>降雨機率、紫外線指數與未來一週預報</span>
+            </li>
+          </ul>
+
+          <div class="card-tech-tags">
+            <span class="tech-tag">Glassmorphism</span>
+            <span class="tech-tag">Phosphor Icons</span>
+            <span class="tech-tag">Weather Dashboard</span>
+            <span class="tech-tag">Skeleton UI</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <a href="taipei_weather_dashboard.html" class="btn-launch">
+            <span>開啟應用</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button 
+            class="btn-preview open-modal-btn" 
+            data-url="taipei_weather_dashboard.html" 
+            data-title="台北即時天氣 Dashboard"
+            data-icon="fa-cloud-sun-rain"
+            title="彈窗快速預覽"
+            aria-label="快速預覽台北即時天氣 Dashboard"
+          >
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </article>
+
+      <!-- Card 6: 台灣抹茶推薦名店互動地圖 -->
+      <article 
+        class="project-card" 
+        data-category="map" 
+        data-keywords="台灣 抹茶 名店 推薦 美食 地圖 甜點 飲品 咖啡廳 評分 導航 taiwan matcha map leaflet"
+        style="
+          --card-accent: #10b981;
+          --card-glow: rgba(16, 185, 129, 0.28);
+          --card-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        "
+      >
+        <div class="card-accent-bar"></div>
+        <div class="card-banner">
+          <div class="card-icon-box">
+            <i class="fa-solid fa-mug-hot"></i>
+          </div>
+          <span class="card-category-badge">地圖導覽</span>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title">台灣抹茶推薦名店互動地圖</h2>
+          <p class="card-desc">
+            抹茶控必備的台灣精選抹茶專門店互動指南。收錄北中南超高評價名店，提供甜點/飲品分類、評分星級、推薦必點品項及一鍵開啟 Google 導航。
+          </p>
+
+          <ul class="card-features">
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>抹茶主題特調色系與 Leaflet 客製地圖標記</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>北中南地區與甜點/飲品雙維度分類篩選</span>
+            </li>
+            <li class="card-feature-item">
+              <i class="fa-solid fa-check"></i>
+              <span>店家地址、營業時間、星級評分與一鍵導航</span>
+            </li>
+          </ul>
+
+          <div class="card-tech-tags">
+            <span class="tech-tag">Leaflet.js</span>
+            <span class="tech-tag">Matcha Palette</span>
+            <span class="tech-tag">GeoJSON Filtering</span>
+            <span class="tech-tag">Google Map Link</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <a href="taiwan_matcha_map.html" class="btn-launch">
+            <span>開啟應用</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button 
+            class="btn-preview open-modal-btn" 
+            data-url="taiwan_matcha_map.html" 
+            data-title="台灣抹茶推薦名店互動地圖"
+            data-icon="fa-mug-hot"
+            title="彈窗快速預覽"
+            aria-label="快速預覽台灣抹茶推薦名店互動地圖"
+          >
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </article>
+
+    </main>
+
+    <!-- Footer Section -->
+    <footer class="app-footer">
+      <div class="footer-links">
+        <a href="daily_water_tracker.html" class="footer-link">喝水追蹤</a>
+        <a href="data_pseudonymization.html" class="footer-link">個資假名化</a>
+        <a href="european_tourist_attractions_map.html" class="footer-link">歐洲景點地圖</a>
+        <a href="sub_teacher.html" class="footer-link">瑜珈代課系統</a>
+        <a href="taipei_weather_dashboard.html" class="footer-link">台北天氣</a>
+        <a href="taiwan_matcha_map.html" class="footer-link">台灣抹茶地圖</a>
+      </div>
+      <p>© 2026 AI 專案作品集 · Crafted with Modern Web Standards · 響應式前端應用平台</p>
+    </footer>
+  </div>
+
+  <!-- Quick Preview Modal -->
+  <div class="modal-overlay" id="previewModal" aria-hidden="true" role="dialog">
+    <div class="modal-container">
+      <div class="modal-header">
+        <div class="modal-title-area">
+          <i id="modalIcon" class="fa-solid fa-cube modal-title-icon" style="color: #6366f1;"></i>
+          <span id="modalTitle" class="modal-title">應用程式預覽</span>
+        </div>
+        <div class="modal-actions">
+          <a id="modalExternalLink" href="#" target="_blank" class="modal-btn" title="在新分頁中完整開啟">
+            <span>新分頁開啟</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button id="modalCloseBtn" class="modal-btn-close" title="關閉預覽 (Esc)">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      <div class="modal-iframe-wrapper">
+        <iframe id="previewIframe" class="modal-iframe" src="" title="應用程式即時預覽"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scroll to top button -->
+  <button id="scrollTopBtn" class="scroll-top-btn" title="回到頂部" aria-label="回到頂部">
+    <i class="fa-solid fa-chevron-up"></i>
+  </button>
+
+  <!-- JavaScript Interaction Logic -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // ==========================================
+      // 1. Theme Management (Dark / Light)
+      // ==========================================
+      const themeToggleBtn = document.getElementById('themeToggleBtn');
+      const themeIcon = document.getElementById('themeIcon');
+      const htmlElement = document.documentElement;
+
+      const savedTheme = localStorage.getItem('portfolio_theme') || 'dark';
+      applyTheme(savedTheme);
+
+      themeToggleBtn.addEventListener('click', () => {
+        const isDark = htmlElement.classList.contains('dark');
+        const nextTheme = isDark ? 'light' : 'dark';
+        applyTheme(nextTheme);
+        localStorage.setItem('portfolio_theme', nextTheme);
+      });
+
+      function applyTheme(theme) {
+        if (theme === 'light') {
+          htmlElement.classList.remove('dark');
+          htmlElement.classList.add('light');
+          themeIcon.className = 'fa-solid fa-moon';
+        } else {
+          htmlElement.classList.remove('light');
+          htmlElement.classList.add('dark');
+          themeIcon.className = 'fa-solid fa-sun';
+        }
+      }
+
+      // ==========================================
+      // 2. Filter & Search Logic
+      // ==========================================
+      const searchInput = document.getElementById('searchInput');
+      const searchClearBtn = document.getElementById('searchClearBtn');
+      const filterBtns = document.querySelectorAll('.filter-btn');
+      const projectCards = document.querySelectorAll('.project-card');
+      const itemsCountEl = document.getElementById('itemsCount');
+      const projectsGrid = document.getElementById('projectsGrid');
+
+      let currentCategory = 'all';
+      let currentQuery = '';
+
+      function filterProjects() {
+        let visibleCount = 0;
+        const query = currentQuery.toLowerCase().trim();
+
+        projectCards.forEach(card => {
+          const category = card.getAttribute('data-category');
+          const keywords = card.getAttribute('data-keywords') || '';
+          const title = card.querySelector('.card-title')?.textContent || '';
+          const desc = card.querySelector('.card-desc')?.textContent || '';
+          const fullText = (title + ' ' + desc + ' ' + keywords).toLowerCase();
+
+          const matchesCategory = (currentCategory === 'all' || category === currentCategory);
+          const matchesQuery = !query || fullText.includes(query);
+
+          if (matchesCategory && matchesQuery) {
+            card.style.display = 'flex';
+            visibleCount++;
+          } else {
+            card.style.display = 'none';
+          }
+        });
+
+        // Update items count
+        itemsCountEl.textContent = `顯示 ${visibleCount} 個專案`;
+
+        // Handle Empty state
+        let emptyStateEl = document.getElementById('emptyStateNotice');
+        if (visibleCount === 0) {
+          if (!emptyStateEl) {
+            emptyStateEl = document.createElement('div');
+            emptyStateEl.id = 'emptyStateNotice';
+            emptyStateEl.className = 'empty-state';
+            emptyStateEl.innerHTML = `
+              <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
+              <div class="empty-title">查無符合條件的專案</div>
+              <div class="empty-desc">請嘗試其他關鍵字或切換至「全部專案」標籤。</div>
+            `;
+            projectsGrid.appendChild(emptyStateEl);
+          }
+        } else if (emptyStateEl) {
+          emptyStateEl.remove();
+        }
+      }
+
+      // Category buttons click
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          filterBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentCategory = btn.getAttribute('data-category');
+          filterProjects();
+        });
+      });
+
+      // Search input handler
+      searchInput.addEventListener('input', (e) => {
+        currentQuery = e.target.value;
+        searchClearBtn.style.display = currentQuery ? 'block' : 'none';
+        filterProjects();
+      });
+
+      // Clear search
+      searchClearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        currentQuery = '';
+        searchClearBtn.style.display = 'none';
+        searchInput.focus();
+        filterProjects();
+      });
+
+      // ==========================================
+      // 3. Quick Preview Modal Handler
+      // ==========================================
+      const previewModal = document.getElementById('previewModal');
+      const previewIframe = document.getElementById('previewIframe');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalIcon = document.getElementById('modalIcon');
+      const modalExternalLink = document.getElementById('modalExternalLink');
+      const modalCloseBtn = document.getElementById('modalCloseBtn');
+      const previewBtns = document.querySelectorAll('.open-modal-btn');
+
+      previewBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const url = btn.getAttribute('data-url');
+          const title = btn.getAttribute('data-title');
+          const icon = btn.getAttribute('data-icon') || 'fa-cube';
+
+          modalTitle.textContent = title;
+          modalIcon.className = `fa-solid ${icon} modal-title-icon`;
+          modalExternalLink.href = url;
+          previewIframe.src = url;
+
+          previewModal.classList.add('active');
+          previewModal.setAttribute('aria-hidden', 'false');
+          document.body.style.overflow = 'hidden';
+        });
+      });
+
+      function closeModal() {
+        previewModal.classList.remove('active');
+        previewModal.setAttribute('aria-hidden', 'true');
+        previewIframe.src = '';
+        document.body.style.overflow = '';
+      }
+
+      modalCloseBtn.addEventListener('click', closeModal);
+
+      previewModal.addEventListener('click', (e) => {
+        if (e.target === previewModal) {
+          closeModal();
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && previewModal.classList.contains('active')) {
+          closeModal();
+        }
+      });
+
+      // ==========================================
+      // 4. Scroll to Top Button
+      // ==========================================
+      const scrollTopBtn = document.getElementById('scrollTopBtn');
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 300) {
+          scrollTopBtn.classList.add('visible');
+        } else {
+          scrollTopBtn.classList.remove('visible');
+        }
+      });
+
+      scrollTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  </script>
+</body>
+</html>

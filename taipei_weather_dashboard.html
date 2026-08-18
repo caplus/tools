@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台北即時天氣 Dashboard</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Phosphor Icons 作為精美的天氣圖示 -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- 引入 Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            /* 使用漸層背景增加質感 */
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            /* 玻璃擬態 (Glassmorphism) 效果 */
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+
+        .spin-animation {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 漸變文字效果 */
+        .text-gradient {
+            background: linear-gradient(to right, #0284c7, #2563eb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* 數值載入時的骨架屏動畫 */
+        .skeleton {
+            background: #cbd5e1;
+            background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+            border-radius: 5px;
+            background-size: 200% 100%;
+            animation: 1.5s shine linear infinite;
+        }
+
+        @keyframes shine {
+            to {
+                background-position-x: -200%;
+            }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 text-slate-800">
+
+    <div class="glass-card w-full max-w-md rounded-3xl p-6 sm:p-8 relative overflow-hidden transition-all duration-500 hover:shadow-xl">
+        
+        <!-- 背景裝飾圓圈 -->
+        <div class="absolute -top-16 -right-16 w-32 h-32 bg-sky-200 rounded-full mix-blend-multiply filter blur-xl opacity-70"></div>
+        <div class="absolute -bottom-16 -left-16 w-32 h-32 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-70"></div>
+
+        <!-- 卡片標頭 -->
+        <div class="flex justify-between items-center mb-8 relative z-10">
+            <div>
+                <h1 class="text-3xl font-bold text-gradient flex items-center gap-2">
+                    <i class="ph-fill ph-map-pin text-blue-500"></i> 台北市
+                </h1>
+                <p class="text-sm text-slate-500 font-medium mt-1" id="update-time">更新中...</p>
+            </div>
+            <button id="refresh-btn" class="p-3 bg-white/80 hover:bg-white rounded-full shadow-sm text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400" aria-label="重新整理天氣">
+                <i class="ph ph-arrows-clockwise text-xl" id="refresh-icon"></i>
+            </button>
+        </div>
+
+        <!-- 錯誤訊息顯示區 -->
+        <div id="error-message" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-6 text-sm flex items-center gap-2 relative z-10">
+            <i class="ph ph-warning-circle text-lg"></i>
+            <span>無法取得天氣資料，請稍後再試。</span>
+        </div>
+
+        <div class="flex flex-col items-center justify-center mb-10 relative z-10">
+            <!-- 天氣大圖示 -->
+            <div id="weather-icon-container" class="text-8xl mb-2 text-sky-500 filter drop-shadow-md transition-all duration-500 transform hover:scale-110">
+                <i class="ph-fill ph-cloud-sun"></i> <!-- 預設圖示 -->
+            </div>
+            
+            <!-- 溫度與狀態 -->
+            <div class="flex items-start">
+                <span id="temp-value" class="text-7xl font-bold tracking-tighter text-slate-800">--</span>
+                <span class="text-4xl font-semibold text-slate-500 mt-2">°C</span>
+            </div>
+            <p id="weather-desc" class="text-xl font-medium text-slate-600 mt-2 tracking-wide">載入中...</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4 relative z-10">
+            <!-- 濕度 -->
+            <div class="bg-white/60 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm hover:bg-white/80 transition-colors">
+                <i class="ph-fill ph-drop text-2xl text-blue-400 mb-2"></i>
+                <span class="text-xs text-slate-500 font-medium mb-1">濕度</span>
+                <span id="humidity-value" class="text-lg font-bold text-slate-800 skeleton w-12 h-6 inline-block text-center rounded"></span>
+            </div>
+            
+            <!-- 風速 -->
+            <div class="bg-white/60 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm hover:bg-white/80 transition-colors">
+                <i class="ph-fill ph-wind text-2xl text-teal-500 mb-2"></i>
+                <span class="text-xs text-slate-500 font-medium mb-1">風速</span>
+                <div class="flex items-end gap-1">
+                    <span id="wind-value" class="text-lg font-bold text-slate-800 skeleton w-10 h-6 inline-block text-center rounded"></span>
+                    <span class="text-[10px] text-slate-500 font-bold mb-1 hidden" id="wind-unit">km/h</span>
+                </div>
+            </div>
+            
+            <!-- 降雨量 -->
+            <div class="bg-white/60 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm hover:bg-white/80 transition-colors">
+                <i class="ph-fill ph-cloud-rain text-2xl text-indigo-400 mb-2"></i>
+                <span class="text-xs text-slate-500 font-medium mb-1">降雨量</span>
+                <div class="flex items-end gap-1">
+                    <span id="rain-value" class="text-lg font-bold text-slate-800 skeleton w-10 h-6 inline-block text-center rounded"></span>
+                    <span class="text-[10px] text-slate-500 font-bold mb-1 hidden" id="rain-unit">mm</span>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // 台北市經緯度
+        const LATITUDE = 25.0375;
+        const LONGITUDE = 121.5272;
+        
+        // Open-Meteo API URL
+        // 請求：目前溫度、相對濕度、降雨量、天氣代碼、風速。指定時區為亞洲/台北
+        const API_URL = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&timezone=Asia%2FTaipei`;
+
+        // WMO 天氣代碼對應表 (簡化版，對應 Phosphor Icons)
+        const weatherCodes = {
+            0: { desc: '晴朗無雲', icon: 'ph-sun', color: 'text-yellow-500' },
+            1: { desc: '晴時多雲', icon: 'ph-cloud-sun', color: 'text-yellow-400' },
+            2: { desc: '多雲', icon: 'ph-cloud', color: 'text-slate-400' },
+            3: { desc: '陰天', icon: 'ph-clouds', color: 'text-slate-500' },
+            45: { desc: '霧', icon: 'ph-cloud-fog', color: 'text-slate-400' },
+            48: { desc: '霧淞', icon: 'ph-cloud-fog', color: 'text-slate-400' },
+            51: { desc: '毛毛雨(輕微)', icon: 'ph-cloud-rain', color: 'text-blue-400' },
+            53: { desc: '毛毛雨(中等)', icon: 'ph-cloud-rain', color: 'text-blue-500' },
+            55: { desc: '毛毛雨(密集)', icon: 'ph-cloud-rain', color: 'text-blue-600' },
+            61: { desc: '陣雨(輕微)', icon: 'ph-cloud-rain', color: 'text-blue-400' },
+            63: { desc: '陣雨(中等)', icon: 'ph-cloud-rain', color: 'text-blue-500' },
+            65: { desc: '陣雨(強烈)', icon: 'ph-cloud-rain', color: 'text-blue-600' },
+            71: { desc: '降雪(輕微)', icon: 'ph-cloud-snow', color: 'text-sky-300' },
+            73: { desc: '降雪(中等)', icon: 'ph-cloud-snow', color: 'text-sky-400' },
+            75: { desc: '降雪(強烈)', icon: 'ph-cloud-snow', color: 'text-sky-500' },
+            80: { desc: '短暫陣雨(輕微)', icon: 'ph-cloud-showers', color: 'text-blue-500' },
+            81: { desc: '短暫陣雨(中等)', icon: 'ph-cloud-showers', color: 'text-blue-600' },
+            82: { desc: '短暫陣雨(強烈)', icon: 'ph-cloud-showers', color: 'text-blue-700' },
+            95: { desc: '雷雨', icon: 'ph-cloud-lightning', color: 'text-purple-600' },
+            96: { desc: '雷雨伴隨輕微冰雹', icon: 'ph-cloud-lightning', color: 'text-purple-600' },
+            99: { desc: '雷雨伴隨強烈冰雹', icon: 'ph-cloud-lightning', color: 'text-purple-700' },
+        };
+
+        const els = {
+            temp: document.getElementById('temp-value'),
+            desc: document.getElementById('weather-desc'),
+            humidity: document.getElementById('humidity-value'),
+            wind: document.getElementById('wind-value'),
+            rain: document.getElementById('rain-value'),
+            iconContainer: document.getElementById('weather-icon-container'),
+            updateTime: document.getElementById('update-time'),
+            refreshBtn: document.getElementById('refresh-btn'),
+            refreshIcon: document.getElementById('refresh-icon'),
+            errorMsg: document.getElementById('error-message'),
+            windUnit: document.getElementById('wind-unit'),
+            rainUnit: document.getElementById('rain-unit')
+        };
+
+        function formatTime(date) {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        function setSkeletonState(isActive) {
+            const values = [els.humidity, els.wind, els.rain];
+            
+            if (isActive) {
+                els.temp.textContent = '--';
+                els.desc.textContent = '載入中...';
+                els.windUnit.classList.add('hidden');
+                els.rainUnit.classList.add('hidden');
+                
+                values.forEach(el => {
+                    el.textContent = '';
+                    el.classList.add('skeleton');
+                });
+            } else {
+                els.windUnit.classList.remove('hidden');
+                els.rainUnit.classList.remove('hidden');
+                
+                values.forEach(el => {
+                    el.classList.remove('skeleton');
+                });
+            }
+        }
+
+        async function fetchWeather() {
+            // 開始旋轉動畫並隱藏錯誤
+            els.refreshIcon.classList.add('spin-animation');
+            els.errorMsg.classList.add('hidden');
+            setSkeletonState(true);
+
+            try {
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const current = data.current;
+
+                // 移除骨架屏
+                setSkeletonState(false);
+
+                // 更新數值
+                // 四捨五入溫度
+                els.temp.textContent = Math.round(current.temperature_2m); 
+                els.humidity.textContent = `${current.relative_humidity_2m}%`;
+                els.wind.textContent = current.wind_speed_10m;
+                els.rain.textContent = current.precipitation;
+
+                // 處理天氣代碼與圖示
+                const code = current.weather_code;
+                // 預設為未知天氣
+                let weatherInfo = weatherCodes[code] || { desc: '未知天氣', icon: 'ph-question', color: 'text-slate-500' };
+                
+                // 簡單判斷白天/黑夜以調整圖示 (例如：如果是晴天，晚上應該顯示月亮)
+                const hour = new Date().getHours();
+                const isNight = hour < 6 || hour >= 18;
+                
+                if (isNight && code === 0) {
+                    weatherInfo = { desc: '晴朗無雲', icon: 'ph-moon', color: 'text-indigo-300' };
+                } else if (isNight && code === 1) {
+                    weatherInfo = { desc: '晴時多雲', icon: 'ph-cloud-moon', color: 'text-indigo-300' };
+                }
+
+                els.desc.textContent = weatherInfo.desc;
+                
+                // 更新圖示並加上動畫效果
+                els.iconContainer.innerHTML = `<i class="ph-fill ${weatherInfo.icon}"></i>`;
+                // 移除舊的顏色類別，加入新的
+                els.iconContainer.className = `text-8xl mb-2 filter drop-shadow-md transition-all duration-500 transform hover:scale-110 ${weatherInfo.color}`;
+
+                // 更新時間
+                const now = new Date();
+                els.updateTime.textContent = `最後更新：今天 ${formatTime(now)}`;
+
+            } catch (error) {
+                console.error("無法取得天氣資料:", error);
+                setSkeletonState(false);
+                els.errorMsg.classList.remove('hidden');
+                els.updateTime.textContent = "更新失敗";
+                els.desc.textContent = "資料載入失敗";
+            } finally {
+                // 為了視覺效果，確保動畫至少轉一圈 (1秒)
+                setTimeout(() => {
+                    els.refreshIcon.classList.remove('spin-animation');
+                }, 500);
+            }
+        }
+
+        els.refreshBtn.addEventListener('click', fetchWeather);
+
+        // 頁面載入完成後立即獲取資料
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchWeather();
+            // 設定每 15 分鐘自動更新一次 (15 * 60 * 1000 ms)
+            setInterval(fetchWeather, 900000);
+        });
+    </script>
+</body>
+</html>

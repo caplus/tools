@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日喝水追蹤與紀錄</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        water: {
+                            100: '#E1F5FE',
+                            200: '#B3E5FC',
+                            300: '#81D4FA',
+                            400: '#4FC3F7',
+                            500: '#29B6F6',
+                            600: '#03A9F4',
+                            700: '#0288D1',
+                            800: '#0277BD',
+                            900: '#01579B',
+                        }
+                    },
+                    animation: {
+                        'wave': 'wave 2s linear infinite',
+                        'fill-up': 'fillUp 1s ease-out forwards',
+                        'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                    },
+                    keyframes: {
+                        wave: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' },
+                        },
+                        fillUp: {
+                            'from': { height: 'var(--start-height)' },
+                            'to': { height: 'var(--end-height)' },
+                        },
+                        pop: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #f0f9ff 0%, #cffafe 100%);
+            min-height: 100vh;
+        }
+
+        /* Glass visualization styles */
+        .glass-container {
+            position: relative;
+            width: 160px;
+            height: 240px;
+            background: rgba(255, 255, 255, 0.4);
+            border: 4px solid rgba(255, 255, 255, 0.8);
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(3, 169, 244, 0.1),
+                        inset 0 0 20px rgba(255, 255, 255, 0.5);
+            margin: 0 auto;
+        }
+
+        .water-level {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 200%; /* Wider for wave animation */
+            background: linear-gradient(to bottom, #4FC3F7, #0288D1);
+            transition: height 0.5s ease-in-out;
+            opacity: 0.85;
+            height: 0%;
+        }
+
+        .water-wave {
+            position: absolute;
+            top: -15px;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 88.7'%3E%3Cpath d='M800 56.9c-155.5 0-204.9-50-405.5-49.9-200 0-250 49.9-394.5 49.9v31.8h800v-.2-31.6z' fill='%234FC3F7'/%3E%3C/svg%3E");
+            background-size: 50% 100%;
+            animation: wave 3s linear infinite;
+        }
+        
+        .water-wave.wave2 {
+            top: -12px;
+            opacity: 0.5;
+            animation: wave 4s linear infinite reverse;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 88.7'%3E%3Cpath d='M800 56.9c-155.5 0-204.9-50-405.5-49.9-200 0-250 49.9-394.5 49.9v31.8h800v-.2-31.6z' fill='%2329B6F6'/%3E%3C/svg%3E");
+        }
+
+        /* Circular Progress Styles */
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.8s ease-in-out;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        /* Custom Scrollbar for history */
+        .history-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .history-scroll::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+        .history-scroll::-webkit-scrollbar-thumb {
+            background: rgba(3, 169, 244, 0.3);
+            border-radius: 10px;
+        }
+        .history-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(3, 169, 244, 0.5);
+        }
+
+        /* Confetti for goal reached */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+        }
+        
+        /* Modal Backdrop */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased flex items-center justify-center p-4 sm:p-8">
+
+    <div class="max-w-4xl w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-pop">
+        
+        <!-- Left Column: Visualization & Status -->
+        <div class="w-full md:w-5/12 bg-gradient-to-br from-water-500 to-water-700 p-8 text-white flex flex-col items-center justify-center relative overflow-hidden shrink-0">
+            <!-- Decorative circles -->
+            <div class="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2 blur-2xl"></div>
+            <div class="absolute bottom-0 right-0 w-64 h-64 bg-water-900/20 rounded-full translate-x-1/3 translate-y-1/3 blur-3xl"></div>
+
+            <div class="text-center z-10 w-full mb-8">
+                <h1 class="text-2xl font-bold tracking-tight mb-1">今日喝水量</h1>
+                <p class="text-water-100 text-sm font-medium" id="current-date">載入中...</p>
+            </div>
+
+            <div class="z-10 mb-8 relative">
+                <!-- SVG Progress Ring surrounding the glass -->
+                <svg class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-72 pointer-events-none" viewBox="0 0 200 240">
+                    <rect x="10" y="10" width="180" height="220" rx="30" ry="30" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+                    <rect id="progress-outline" x="10" y="10" width="180" height="220" rx="30" ry="30" fill="none" stroke="#fff" stroke-width="4" stroke-dasharray="800" stroke-dashoffset="800" class="transition-all duration-700 ease-out"/>
+                </svg>
+
+                <div class="glass-container">
+                    <div class="water-level" id="water-level-fill">
+                        <div class="water-wave wave2"></div>
+                        <div class="water-wave"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="z-10 text-center w-full">
+                <div class="flex items-baseline justify-center gap-1 mb-2">
+                    <span class="text-5xl font-bold tracking-tighter" id="current-intake">0</span>
+                    <span class="text-xl text-water-100 font-medium">/ <span id="daily-goal-display">2000</span> ml</span>
+                </div>
+                <div class="bg-white/20 rounded-full h-2 w-3/4 mx-auto overflow-hidden">
+                    <div id="progress-bar-linear" class="bg-white h-full w-0 transition-all duration-700 ease-out"></div>
+                </div>
+                <p class="mt-3 text-sm font-medium text-water-100" id="motivational-text">開始喝水吧！</p>
+            </div>
+            
+            <button id="btn-settings" class="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2 z-20" title="設定目標">
+                <i class="fa-solid fa-gear text-lg"></i>
+            </button>
+        </div>
+
+        <div class="w-full md:w-7/12 p-6 sm:p-10 bg-white flex flex-col h-[600px] md:h-auto">
+            
+            <!-- Quick Add Section -->
+            <div class="mb-8">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-droplet text-water-500"></i> 快速紀錄
+                </h2>
+                
+                <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
+                    <button class="quick-add-btn group flex flex-col items-center justify-center p-3 sm:p-4 border-2 border-water-100 bg-water-50/50 rounded-2xl hover:border-water-400 hover:bg-water-50 transition-all active:scale-95" data-amount="150">
+                        <i class="fa-solid fa-mug-hot text-xl sm:text-2xl text-water-400 group-hover:text-water-600 mb-2 transition-colors"></i>
+                        <span class="font-semibold text-slate-700">150 ml</span>
+                        <span class="text-xs text-slate-400">水杯</span>
+                    </button>
+                    
+                    <button class="quick-add-btn group flex flex-col items-center justify-center p-3 sm:p-4 border-2 border-water-100 bg-water-50/50 rounded-2xl hover:border-water-400 hover:bg-water-50 transition-all active:scale-95" data-amount="300">
+                        <i class="fa-solid fa-glass-water text-xl sm:text-2xl text-water-400 group-hover:text-water-600 mb-2 transition-colors"></i>
+                        <span class="font-semibold text-slate-700">300 ml</span>
+                        <span class="text-xs text-slate-400">馬克杯</span>
+                    </button>
+                    
+                    <button class="quick-add-btn group flex flex-col items-center justify-center p-3 sm:p-4 border-2 border-water-100 bg-water-50/50 rounded-2xl hover:border-water-400 hover:bg-water-50 transition-all active:scale-95" data-amount="500">
+                        <i class="fa-solid fa-bottle-water text-xl sm:text-2xl text-water-400 group-hover:text-water-600 mb-2 transition-colors"></i>
+                        <span class="font-semibold text-slate-700">500 ml</span>
+                        <span class="text-xs text-slate-400">寶特瓶</span>
+                    </button>
+                </div>
+
+                <!-- Custom Add -->
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input type="number" id="custom-amount" placeholder="自訂容量" min="1" max="2000" class="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-water-400 focus:border-transparent transition-all">
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">ml</span>
+                    </div>
+                    <button id="btn-custom-add" class="bg-water-500 hover:bg-water-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-water-500/30 transition-all active:scale-95 flex items-center justify-center">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-water-500"></i> 今日紀錄
+                    </h2>
+                    <button id="btn-undo" class="text-sm text-slate-400 hover:text-red-500 font-medium transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fa-solid fa-rotate-left"></i> 復原上次
+                    </button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto history-scroll pr-2" id="history-list">
+                    <!-- History items will be dynamically inserted here -->
+                    <div class="flex flex-col items-center justify-center h-full text-slate-400 text-sm empty-state">
+                        <i class="fa-solid fa-glass-water text-3xl mb-2 opacity-50"></i>
+                        <p>尚未有任何紀錄，喝口水吧！</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Daily Reset / Stats footer -->
+            <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-medium">
+                <span id="last-updated">最後更新: --:--</span>
+                <button id="btn-reset-day" class="hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-trash-can mr-1"></i> 清空今日紀錄
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm transform scale-95 transition-transform duration-300" id="settings-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-slate-800">設定</h3>
+                <button id="btn-close-settings" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="mb-6">
+                <label for="input-daily-goal" class="block text-sm font-semibold text-slate-700 mb-2">每日目標 (ml)</label>
+                <input type="number" id="input-daily-goal" value="2000" min="500" max="5000" step="100" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-water-400 focus:border-transparent transition-all text-lg font-medium">
+                <p class="text-xs text-slate-500 mt-2">建議成人每日飲水量約為體重(kg) × 30~40ml。</p>
+            </div>
+            
+            <button id="btn-save-settings" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 rounded-xl transition-colors">
+                儲存設定
+            </button>
+        </div>
+    </div>
+
+    <!-- Confetti Container -->
+    <div id="confetti-container" class="fixed inset-0 pointer-events-none z-50 overflow-hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // State Management
+            const state = {
+                intake: 0,
+                goal: 2000,
+                history: [],
+                date: new Date().toLocaleDateString(),
+                lastUpdated: null
+            };
+
+            // DOM Elements
+            const elements = {
+                currentDate: document.getElementById('current-date'),
+                currentIntake: document.getElementById('current-intake'),
+                dailyGoalDisplay: document.getElementById('daily-goal-display'),
+                waterLevelFill: document.getElementById('water-level-fill'),
+                progressBarLinear: document.getElementById('progress-bar-linear'),
+                progressOutline: document.getElementById('progress-outline'),
+                motivationalText: document.getElementById('motivational-text'),
+                historyList: document.getElementById('history-list'),
+                customAmount: document.getElementById('custom-amount'),
+                btnCustomAdd: document.getElementById('btn-custom-add'),
+                btnUndo: document.getElementById('btn-undo'),
+                btnResetDay: document.getElementById('btn-reset-day'),
+                lastUpdatedDisplay: document.getElementById('last-updated'),
+                quickAddBtns: document.querySelectorAll('.quick-add-btn'),
+                
+                // Settings Modal Elements
+                btnSettings: document.getElementById('btn-settings'),
+                settingsModal: document.getElementById('settings-modal'),
+                settingsContent: document.getElementById('settings-modal-content'),
+                btnCloseSettings: document.getElementById('btn-close-settings'),
+                btnSaveSettings: document.getElementById('btn-save-settings'),
+                inputDailyGoal: document.getElementById('input-daily-goal'),
+                
+                // Confetti Container
+                confettiContainer: document.getElementById('confetti-container')
+            };
+
+            function init() {
+                // Set current date
+                const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+                elements.currentDate.textContent = new Date().toLocaleDateString('zh-TW', options);
+                
+                loadData();
+                checkNewDay();
+                updateUI();
+                setupEventListeners();
+            }
+
+            function loadData() {
+                const savedData = localStorage.getItem('waterTrackerState');
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        state.intake = parsed.intake || 0;
+                        state.goal = parsed.goal || 2000;
+                        state.history = parsed.history || [];
+                        state.date = parsed.date || new Date().toLocaleDateString();
+                        state.lastUpdated = parsed.lastUpdated || null;
+                    } catch (e) {
+                        console.error("Error parsing saved data", e);
+                    }
+                }
+            }
+
+            function saveData() {
+                state.lastUpdated = new Date().toISOString();
+                localStorage.setItem('waterTrackerState', JSON.stringify(state));
+                updateLastUpdatedDisplay();
+            }
+
+            function checkNewDay() {
+                const today = new Date().toLocaleDateString();
+                if (state.date !== today) {
+                    // It's a new day, reset intake and history, but keep the goal
+                    state.intake = 0;
+                    state.history = [];
+                    state.date = today;
+                    saveData();
+                }
+            }
+
+            function addWater(amount) {
+                if (amount <= 0 || isNaN(amount)) return;
+                
+                const timestamp = new Date().toISOString();
+                const record = {
+                    id: 'r_' + Date.now(),
+                    amount: amount,
+                    time: timestamp
+                };
+
+                state.intake += amount;
+                state.history.unshift(record); // Add to beginning of array
+                
+                saveData();
+                updateUI();
+                
+                // Check if goal just reached
+                if (state.intake >= state.goal && (state.intake - amount) < state.goal) {
+                    celebrateGoal();
+                }
+            }
+
+            function undoLastRecord() {
+                if (state.history.length === 0) return;
+                
+                const lastRecord = state.history.shift(); // Remove first element
+                state.intake = Math.max(0, state.intake - lastRecord.amount);
+                
+                saveData();
+                updateUI();
+            }
+
+            function resetDay() {
+                // Use a custom styled modal instead of confirm() as per rules, 
+                // but since we need a quick interaction, we'll implement a simple DOM-based confirm
+                
+                const confirmOverlay = document.createElement('div');
+                confirmOverlay.className = 'fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center animate-pop';
+                confirmOverlay.innerHTML = `
+                    <div class="bg-white p-6 rounded-2xl max-w-sm w-full mx-4 shadow-2xl text-center">
+                        <div class="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800 mb-2">確定清空紀錄？</h3>
+                        <p class="text-slate-500 mb-6 text-sm">此操作將清除今日所有的喝水紀錄，無法復原。</p>
+                        <div class="flex gap-3">
+                            <button id="cancel-reset" class="flex-1 py-2.5 rounded-xl font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">取消</button>
+                            <button id="confirm-reset" class="flex-1 py-2.5 rounded-xl font-medium text-white bg-red-500 hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30">確定清空</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(confirmOverlay);
+                
+                document.getElementById('cancel-reset').onclick = () => confirmOverlay.remove();
+                document.getElementById('confirm-reset').onclick = () => {
+                    state.intake = 0;
+                    state.history = [];
+                    saveData();
+                    updateUI();
+                    confirmOverlay.remove();
+                };
+            }
+
+            function updateUI() {
+                // Update text displays
+                // Use counting animation for numbers
+                animateValue(elements.currentIntake, parseInt(elements.currentIntake.textContent), state.intake, 500);
+                elements.dailyGoalDisplay.textContent = state.goal;
+                
+                // Calculate percentages
+                const percentage = Math.min(100, (state.intake / state.goal) * 100);
+                
+                // Update Glass Fill Height (Max 95% to not spill over visual border)
+                const fillHeight = Math.min(95, percentage);
+                elements.waterLevelFill.style.height = `${fillHeight}%`;
+                
+                // Update SVG outline (Perimeter of rect approx (180+220)*2 = 800)
+                const dashoffset = 800 - (800 * percentage) / 100;
+                elements.progressOutline.style.strokeDashoffset = dashoffset;
+                
+                // Change stroke color based on completion
+                if (percentage >= 100) {
+                    elements.progressOutline.style.stroke = '#A7F3D0'; // emerald-200
+                } else {
+                    elements.progressOutline.style.stroke = 'rgba(255,255,255,0.6)';
+                }
+
+                // Update small linear progress bar
+                elements.progressBarLinear.style.width = `${percentage}%`;
+
+                // Update motivational text
+                updateMotivationalText(percentage);
+                
+                // Update Undo button state
+                elements.btnUndo.disabled = state.history.length === 0;
+                
+                // Update History List
+                renderHistory();
+                
+                updateLastUpdatedDisplay();
+            }
+
+            function updateMotivationalText(percentage) {
+                const textEl = elements.motivationalText;
+                if (percentage === 0) {
+                    textEl.textContent = "喝杯水，開啟美好的一天！";
+                } else if (percentage < 30) {
+                    textEl.textContent = "好的開始！繼續保持水份補充。";
+                } else if (percentage < 70) {
+                    textEl.textContent = "做得很棒！你正在穩定朝目標邁進。";
+                } else if (percentage < 100) {
+                    textEl.textContent = "快要達標了！再喝一點點就完成囉。";
+                } else {
+                    textEl.textContent = "🎉 太棒了！已達成今日目標！";
+                }
+            }
+
+            function renderHistory() {
+                if (state.history.length === 0) {
+                    elements.historyList.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-full text-slate-400 text-sm empty-state py-8">
+                            <i class="fa-solid fa-glass-water text-4xl mb-3 opacity-20"></i>
+                            <p>尚未有任何紀錄</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                elements.historyList.innerHTML = '';
+                
+                state.history.forEach((record, index) => {
+                    const timeString = new Date(record.time).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+                    
+                    // Determine icon based on amount
+                    let icon = 'fa-glass-water';
+                    let iconColor = 'text-water-400';
+                    if (record.amount <= 150) {
+                        icon = 'fa-mug-hot';
+                    } else if (record.amount >= 500) {
+                        icon = 'fa-bottle-water';
+                        iconColor = 'text-blue-500';
+                    }
+
+                    const item = document.createElement('div');
+                    item.className = 'flex items-center justify-between p-3 sm:p-4 mb-2 bg-slate-50 border border-slate-100 rounded-xl animate-pop';
+                    // Stagger animation for initial load
+                    item.style.animationDelay = `${index * 0.05}s`;
+                    
+                    item.innerHTML = `
+                        <div class="flex items-center gap-3 sm:gap-4">
+                            <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-lg ${iconColor}">
+                                <i class="fa-solid ${icon}"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700">+${record.amount} ml</p>
+                                <p class="text-xs text-slate-400 font-medium">${timeString}</p>
+                            </div>
+                        </div>
+                    `;
+                    elements.historyList.appendChild(item);
+                });
+            }
+
+            function updateLastUpdatedDisplay() {
+                if (!state.lastUpdated) return;
+                const timeStr = new Date(state.lastUpdated).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+                elements.lastUpdatedDisplay.textContent = `最後更新: ${timeStr}`;
+            }
+
+            function animateValue(obj, start, end, duration) {
+                let startTimestamp = null;
+                const step = (timestamp) => {
+                    if (!startTimestamp) startTimestamp = timestamp;
+                    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                    // Easing function: easeOutQuart
+                    const easeProgress = 1 - Math.pow(1 - progress, 4);
+                    const currentVal = Math.floor(easeProgress * (end - start) + start);
+                    obj.innerHTML = currentVal;
+                    if (progress < 1) {
+                        window.requestAnimationFrame(step);
+                    } else {
+                        obj.innerHTML = end; // Ensure exact final value
+                    }
+                };
+                window.requestAnimationFrame(step);
+            }
+
+            function celebrateGoal() {
+                const colors = ['#4FC3F7', '#29B6F6', '#03A9F4', '#0288D1', '#FFF', '#A7F3D0'];
+                const container = elements.confettiContainer;
+                container.innerHTML = '';
+                
+                for (let i = 0; i < 100; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti rounded-sm sm:rounded-md';
+                    
+                    // Random styles
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.backgroundColor = color;
+                    confetti.style.left = Math.random() * 100 + 'vw';
+                    confetti.style.top = '-10px';
+                    
+                    // Random animation properties
+                    const duration = Math.random() * 3 + 2; // 2s - 5s
+                    const delay = Math.random() * 1;
+                    
+                    container.appendChild(confetti);
+                    
+                    // Animate using Web Animations API
+                    confetti.animate([
+                        { transform: `translate3d(0,0,0) rotate(0deg)`, opacity: 1 },
+                        { transform: `translate3d(${Math.random()*200 - 100}px, 100vh, 0) rotate(${Math.random()*720}deg)`, opacity: 0 }
+                    ], {
+                        duration: duration * 1000,
+                        delay: delay * 1000,
+                        easing: 'cubic-bezier(.37,0,.63,1)',
+                        fill: 'forwards'
+                    });
+                }
+                
+                // Clear after animation finishes
+                setTimeout(() => {
+                    container.innerHTML = '';
+                }, 6000);
+            }
+
+            // Modal Handlers
+            function openSettings() {
+                elements.inputDailyGoal.value = state.goal;
+                elements.settingsModal.classList.remove('opacity-0', 'pointer-events-none');
+                elements.settingsContent.classList.remove('scale-95');
+                elements.settingsContent.classList.add('scale-100');
+            }
+
+            function closeSettings() {
+                elements.settingsModal.classList.add('opacity-0', 'pointer-events-none');
+                elements.settingsContent.classList.remove('scale-100');
+                elements.settingsContent.classList.add('scale-95');
+            }
+
+            function setupEventListeners() {
+                // Quick Add Buttons
+                elements.quickAddBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const amount = parseInt(btn.getAttribute('data-amount'));
+                        addWater(amount);
+                    });
+                });
+
+                // Custom Add
+                elements.btnCustomAdd.addEventListener('click', () => {
+                    const amount = parseInt(elements.customAmount.value);
+                    if (amount && amount > 0) {
+                        addWater(amount);
+                        elements.customAmount.value = ''; // clear input
+                    }
+                });
+                
+                // Allow enter key for custom input
+                elements.customAmount.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        elements.btnCustomAdd.click();
+                    }
+                });
+
+                // Undo
+                elements.btnUndo.addEventListener('click', undoLastRecord);
+
+                // Reset Day
+                elements.btnResetDay.addEventListener('click', resetDay);
+
+                // Settings
+                elements.btnSettings.addEventListener('click', openSettings);
+                elements.btnCloseSettings.addEventListener('click', closeSettings);
+                elements.settingsModal.addEventListener('click', (e) => {
+                    if (e.target === elements.settingsModal) closeSettings();
+                });
+                
+                elements.btnSaveSettings.addEventListener('click', () => {
+                    const newGoal = parseInt(elements.inputDailyGoal.value);
+                    if (newGoal >= 500 && newGoal <= 10000) {
+                        state.goal = newGoal;
+                        saveData();
+                        updateUI();
+                        closeSettings();
+                    }
+                });
+            }
+
+            // Start application
+            init();
+        });
+    </script>
+</body>
+</html>

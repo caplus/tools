@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>台灣抹茶推薦名店互動地圖</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        matcha: {
+                            50: '#f2f9f4',
+                            100: '#e1f2e5',
+                            200: '#c5e5cd',
+                            300: '#9bd1a9',
+                            400: '#69b47e',
+                            500: '#46965d',
+                            600: '#347746',
+                            700: '#2a5e39',
+                            800: '#234a2e',
+                            900: '#1e3d27',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Base styles */
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        
+        /* Map specific styles */
+        #map { width: 100%; height: 100%; z-index: 10; }
+        
+        /* Custom Leaflet Popup Styling */
+        .leaflet-popup-content-wrapper {
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            padding: 0;
+        }
+        .leaflet-popup-content {
+            margin: 0;
+            width: 260px !important;
+        }
+        .leaflet-popup-tip-container {
+            margin-top: -1px;
+        }
+        .leaflet-popup-tip {
+            background-color: #ffffff;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #ffffff;
+            background: rgba(0,0,0,0.3);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            top: 8px;
+            right: 8px;
+            padding: 0;
+            z-index: 20;
+            transition: background 0.2s;
+        }
+        .leaflet-container a.leaflet-popup-close-button:hover {
+            background: rgba(0,0,0,0.6);
+            color: white;
+        }
+
+        /* Marker Animation */
+        .custom-div-icon {
+            background: transparent;
+            border: none;
+        }
+        .marker-pin {
+            width: 36px;
+            height: 36px;
+            border-radius: 50% 50% 50% 0;
+            background: #46965d; /* Matcha 500 */
+            position: absolute;
+            transform: rotate(-45deg);
+            left: 50%;
+            top: 50%;
+            margin: -18px 0 0 -18px;
+            box-shadow: -2px 2px 4px 0 rgba(0,0,0,0.3);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .marker-icon-inner {
+            transform: rotate(45deg);
+            color: white;
+            font-size: 16px;
+        }
+        .leaflet-marker-icon:hover .marker-pin,
+        .leaflet-marker-icon.active .marker-pin {
+            transform: rotate(-45deg) scale(1.15);
+            background: #2a5e39; /* Matcha 700 */
+            z-index: 1000 !important;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        
+        /* Hide map controls on very small screens to save space */
+        @media (max-width: 640px) {
+            .leaflet-control-zoom { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 flex flex-col h-screen overflow-hidden text-gray-800">
+
+    <header class="bg-matcha-700 text-white shadow-md z-30 flex-shrink-0 relative">
+        <div class="max-w-full mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2 rounded-lg">
+                    <i class="fa-solid fa-leaf text-matcha-100 text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-wider">尋找一抹綠意</h1>
+            </div>
+            
+            <div class="hidden sm:flex items-center gap-2 text-matcha-100 text-sm font-medium">
+                <i class="fa-solid fa-map-location-dot"></i> 台灣抹茶名店地圖
+            </div>
+
+            <!-- Mobile Menu Toggle -->
+            <button id="mobile-menu-btn" class="sm:hidden p-2 bg-matcha-600 rounded-md hover:bg-matcha-500 focus:outline-none transition-colors">
+                <i class="fa-solid fa-list-ul text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-full sm:w-[360px] bg-white shadow-[4px_0_24px_rgba(0,0,0,0.08)] z-20 flex flex-col absolute sm:relative h-full transition-transform duration-300 ease-in-out transform -translate-x-full sm:translate-x-0">
+            
+            <!-- Mobile Header for Sidebar -->
+            <div class="sm:hidden flex items-center justify-between p-4 border-b border-gray-100">
+                <h2 class="font-bold text-matcha-800"><i class="fa-solid fa-store mr-2"></i>名店列表</h2>
+                <button id="close-sidebar-btn" class="p-2 text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Filters & Search Area -->
+            <div class="p-4 border-b border-gray-100 bg-white flex-shrink-0 z-10">
+                <div class="relative shadow-sm rounded-lg">
+                    <input type="text" id="search-input" placeholder="搜尋店名、城市或招牌餐點..." class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-matcha-400 focus:border-matcha-400 outline-none transition-all text-sm bg-gray-50 focus:bg-white placeholder-gray-400">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-matcha-500"></i>
+                </div>
+                
+                <div class="mt-4 flex gap-2 overflow-x-auto pb-1 hide-scroll" id="region-filters">
+                    <button class="filter-btn active px-4 py-1.5 bg-matcha-600 text-white text-xs font-semibold rounded-full whitespace-nowrap shadow-sm transition-colors" data-region="all">全台灣</button>
+                    <button class="filter-btn px-4 py-1.5 bg-gray-100 text-gray-600 hover:bg-matcha-100 hover:text-matcha-700 text-xs font-semibold rounded-full whitespace-nowrap transition-colors" data-region="北部">北部</button>
+                    <button class="filter-btn px-4 py-1.5 bg-gray-100 text-gray-600 hover:bg-matcha-100 hover:text-matcha-700 text-xs font-semibold rounded-full whitespace-nowrap transition-colors" data-region="中部">中部</button>
+                    <button class="filter-btn px-4 py-1.5 bg-gray-100 text-gray-600 hover:bg-matcha-100 hover:text-matcha-700 text-xs font-semibold rounded-full whitespace-nowrap transition-colors" data-region="南部">南部</button>
+                </div>
+            </div>
+
+            <!-- List Area -->
+            <div class="flex-1 overflow-y-auto p-3 bg-gray-50/50" id="shop-list">
+                <!-- Javascript will inject list items here -->
+            </div>
+            
+            <!-- Statistics footer -->
+            <div class="p-3 bg-white border-t border-gray-100 text-center text-xs text-gray-400 flex-shrink-0">
+                共找到 <span id="result-count" class="font-bold text-matcha-600">0</span> 間抹茶專賣店
+            </div>
+        </aside>
+
+        <main class="flex-1 relative w-full h-full bg-gray-200">
+            <div id="map"></div>
+            
+            <!-- Hint Overlay (disappears after interaction) -->
+            <div id="map-hint" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-sm text-matcha-800 font-medium border border-matcha-100 transition-opacity duration-500 pointer-events-none flex items-center gap-2">
+                <i class="fa-solid fa-hand-pointer animate-bounce"></i> 點擊地圖標記查看介紹
+            </div>
+            
+            <!-- Locate Me Button -->
+            <button id="locate-btn" class="absolute bottom-6 right-6 z-[1000] bg-white p-3 rounded-full shadow-lg text-matcha-600 hover:text-matcha-800 hover:bg-gray-50 border border-gray-200 focus:outline-none transition-all group">
+                <i class="fa-solid fa-location-crosshairs text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+        </main>
+    </div>
+
+    <script>
+        // --- Data Definitions ---
+        const shops = [
+            {
+                id: 1,
+                name: "平安京茶事",
+                city: "台北市",
+                region: "北部",
+                address: "台北市中正區師大路165號",
+                lat: 25.0215,
+                lng: 121.5269,
+                rating: 4.6,
+                signature: "若竹 (抹茶蛋糕捲)",
+                image: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "台北最具代表性的日式茶屋之一，充滿濃厚京都風情。抹茶甜點皆使用高級宇治抹茶粉製作，口感細緻醇厚。"
+            },
+            {
+                id: 2,
+                name: "Matcha One 齊東店",
+                city: "台北市",
+                region: "北部",
+                address: "台北市中正區齊東街53巷10號",
+                lat: 25.0401,
+                lng: 121.5301,
+                rating: 4.5,
+                signature: "抹茶千層蛋糕",
+                image: "https://images.unsplash.com/photo-1595981267035-7b04d84b4f1e?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "隱身在日式百年歷史建築內的現代抹茶店，將傳統日式庭園與現代法式甜點工藝完美結合。"
+            },
+            {
+                id: 3,
+                name: "辻利茶舗 TSUJIRI 信義遠百店",
+                city: "台北市",
+                region: "北部",
+                address: "台北市信義區松仁路58號B3",
+                lat: 25.0392,
+                lng: 121.5671,
+                rating: 4.4,
+                signature: "辻利冰沙 (漂浮)",
+                image: "https://images.unsplash.com/photo-1576092762791-dd9e222064fb?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "來自日本京都宇治的百年老店，提供最道地的抹茶飲品與霜淇淋，是逛街時的最佳散步甜點。"
+            },
+            {
+                id: 4,
+                name: "明森宇治抹茶專賣店",
+                city: "台中市",
+                region: "中部",
+                address: "台中市西區存中街161巷1號",
+                lat: 24.1396,
+                lng: 120.6632,
+                rating: 4.3,
+                signature: "抹茶宇治金時",
+                image: "https://images.unsplash.com/photo-1558401391-7899b4bd5bbf?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "台中老字號的抹茶專賣店，老宅改建的幽靜空間。抹茶聖代配上Q彈白玉與蜜紅豆，是經典必點。"
+            },
+            {
+                id: 5,
+                name: "TokuToku-matcha & coffee",
+                city: "台中市",
+                region: "中部",
+                address: "台中市西區中興四巷13號",
+                lat: 24.1458,
+                lng: 120.6625,
+                rating: 4.7,
+                signature: "現刷抹茶",
+                image: "https://images.unsplash.com/photo-1563822249548-9a72b6353cd1?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "由日本老闆娘親自打理，非常有溫度的日式小店。提供專業的現刷抹茶與精緻和菓子。"
+            },
+            {
+                id: 6,
+                name: "御前上茶 宇治抹茶專賣 總店",
+                city: "台南市",
+                region: "南部",
+                address: "台南市中西區西門路二段100號",
+                lat: 22.9961,
+                lng: 120.1982,
+                rating: 4.4,
+                signature: "抹茶霜淇淋",
+                image: "https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "從高雄起家、在南部極受歡迎的抹茶品牌。主打平價卻高品質的濃郁抹茶霜淇淋及各式飲品。"
+            },
+            {
+                id: 7,
+                name: "兔思糖法式甜點 Tu's Town",
+                city: "高雄市",
+                region: "南部",
+                address: "高雄市前鎮區沱江街183號",
+                lat: 22.6074,
+                lng: 120.3168,
+                rating: 4.8,
+                signature: "超濃抹茶塔",
+                image: "https://images.unsplash.com/photo-1621285097560-6b66e5aebbc3?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "結合法式甜點工藝與重度抹茶控的需求，抹茶濃度極高，甜度極低，被譽為「南部最強抹茶塔」。"
+            },
+            {
+                id: 8,
+                name: "撒豆サトウ",
+                city: "高雄市",
+                region: "南部",
+                address: "高雄市鳳山區文康街135號",
+                lat: 22.6375,
+                lng: 120.3541,
+                rating: 4.6,
+                signature: "抹茶千層",
+                image: "https://images.unsplash.com/photo-1627914434254-159496b79796?auto=format&fit=crop&q=80&w=600&h=400",
+                description: "隱身住宅區的手作甜點店，抹茶千層餅皮薄透、內餡滑順且抹味十足，經常一開店就秒殺。"
+            }
+        ];
+
+        // --- Application State ---
+        let map;
+        let markers = [];
+        let activeMarkerId = null;
+
+        // --- Core Functions ---
+        
+        function initMap() {
+            // Center of Taiwan
+            const taiwanCenter = [23.7, 120.9];
+            const defaultZoom = window.innerWidth < 640 ? 7 : 8;
+
+            map = L.map('map', {
+                zoomControl: false // Custom position
+            }).setView(taiwanCenter, defaultZoom);
+
+            // Add Map tiles (Light mode design matching theme)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Add zoom control to bottom right
+            L.control.zoom({
+                position: 'bottomright'
+            }).addTo(map);
+
+            // Map interaction hides hint
+            map.once('mousedown dragstart touchstart', () => {
+                document.getElementById('map-hint').style.opacity = '0';
+            });
+
+            // Initial render
+            renderData(shops);
+        }
+
+        function getCustomIcon(id) {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div class="marker-pin" id="marker-pin-${id}">
+                         <div class="marker-icon-inner"><i class="fa-solid fa-leaf"></i></div>
+                       </div>`,
+                iconSize: [36, 36],
+                iconAnchor: [18, 36],
+                popupAnchor: [0, -40]
+            });
+        }
+
+        function renderMarkers(data) {
+            // Clear existing markers
+            markers.forEach(item => map.removeLayer(item.marker));
+            markers = [];
+
+            data.forEach(shop => {
+                const marker = L.marker([shop.lat, shop.lng], {
+                    icon: getCustomIcon(shop.id)
+                }).addTo(map);
+
+                // Generate stars HTML
+                let stars = '';
+                for(let i=1; i<=5; i++) {
+                    if(i <= Math.floor(shop.rating)) {
+                        stars += '<i class="fa-solid fa-star text-yellow-400"></i>';
+                    } else if (i === Math.ceil(shop.rating) && !Number.isInteger(shop.rating)) {
+                        stars += '<i class="fa-solid fa-star-half-stroke text-yellow-400"></i>';
+                    } else {
+                        stars += '<i class="fa-regular fa-star text-gray-300"></i>';
+                    }
+                }
+
+                const popupContent = `
+                    <div class="relative bg-white font-sans">
+                        <div class="h-32 w-full overflow-hidden">
+                            <img src="${shop.image}" alt="${shop.name}" class="w-full h-full object-cover">
+                            <div class="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded backdrop-blur-sm">
+                                <i class="fa-solid fa-location-dot mr-1"></i>${shop.city}
+                            </div>
+                        </div>
+                        <div class="p-4 pt-3">
+                            <h3 class="font-bold text-gray-900 text-lg leading-tight mb-1">${shop.name}</h3>
+                            <div class="flex items-center text-sm mb-2">
+                                <span class="text-gray-600 mr-2 font-medium">${shop.rating}</span>
+                                <div class="text-[10px]">${stars}</div>
+                            </div>
+                            <div class="bg-matcha-50 text-matcha-700 text-xs px-2 py-1.5 rounded mb-3 inline-block font-medium border border-matcha-100">
+                                <i class="fa-solid fa-utensils mr-1"></i> 必點：${shop.signature}
+                            </div>
+                            <p class="text-xs text-gray-600 line-clamp-2 leading-relaxed mb-3">${shop.description}</p>
+                            <a href="https://www.google.com/maps/search/?api=1&query=${shop.lat},${shop.lng}" target="_blank" class="block w-full text-center bg-matcha-600 hover:bg-matcha-700 text-white text-sm font-medium py-2 rounded transition-colors">
+                                <i class="fa-solid fa-location-arrow mr-1"></i> 導航前往
+                            </a>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+
+                // Events
+                marker.on('click', () => {
+                    handleSelection(shop.id, [shop.lat, shop.lng]);
+                });
+
+                markers.push({ id: shop.id, marker: marker });
+            });
+        }
+
+        function renderList(data) {
+            const listContainer = document.getElementById('shop-list');
+            listContainer.innerHTML = '';
+            document.getElementById('result-count').innerText = data.length;
+
+            if (data.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-48 text-gray-400">
+                        <i class="fa-solid fa-leaf text-4xl text-gray-200 mb-3"></i>
+                        <p class="text-sm">找不到符合條件的店家</p>
+                        <button onclick="document.getElementById('search-input').value=''; filterData();" class="mt-3 text-matcha-600 text-xs hover:underline">清除搜尋條件</button>
+                    </div>
+                `;
+                return;
+            }
+
+            data.forEach((shop, index) => {
+                // Animation delay for list items
+                const delay = index * 50;
+                
+                const item = document.createElement('div');
+                item.className = 'shop-item bg-white p-3 mb-3 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 flex gap-3 group relative overflow-hidden';
+                item.dataset.id = shop.id;
+                // Add initial animation state
+                item.style.opacity = '0';
+                item.style.transform = 'translateY(10px)';
+                
+                item.innerHTML = `
+                    <div class="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 relative">
+                        <img src="${shop.image}" alt="${shop.name}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
+                        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4">
+                            <div class="text-white text-[10px] flex items-center"><i class="fa-solid fa-star text-yellow-400 mr-1 text-[8px]"></i> ${shop.rating}</div>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex flex-col py-0.5 min-w-0">
+                        <h4 class="font-bold text-gray-800 text-[15px] truncate group-hover:text-matcha-600 transition-colors" title="${shop.name}">${shop.name}</h4>
+                        <p class="text-[11px] text-gray-500 truncate mt-1 mb-auto"><i class="fa-solid fa-location-dot mr-1"></i>${shop.address}</p>
+                        
+                        <div class="mt-2 flex flex-wrap gap-1">
+                            <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">${shop.region}</span>
+                            <span class="text-[10px] bg-matcha-50 text-matcha-700 px-1.5 py-0.5 rounded border border-matcha-100 truncate max-w-[120px]">${shop.signature}</span>
+                        </div>
+                    </div>
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-matcha-300">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </div>
+                `;
+
+                item.addEventListener('click', () => {
+                    handleSelection(shop.id, [shop.lat, shop.lng]);
+                });
+
+                listContainer.appendChild(item);
+
+                // Trigger animation
+                setTimeout(() => {
+                    item.style.transition = 'all 0.4s ease';
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateY(0)';
+                }, delay);
+            });
+        }
+
+        function handleSelection(id, coords) {
+            // 1. Update List UI
+            document.querySelectorAll('.shop-item').forEach(item => {
+                if (parseInt(item.dataset.id) === id) {
+                    item.classList.add('border-matcha-400', 'ring-2', 'ring-matcha-100', 'bg-matcha-50/30');
+                    // Scroll into view on desktop
+                    if(window.innerWidth >= 640) {
+                        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                } else {
+                    item.classList.remove('border-matcha-400', 'ring-2', 'ring-matcha-100', 'bg-matcha-50/30');
+                }
+            });
+
+            // 2. Map actions
+            map.flyTo(coords, 15, { duration: 1.5, easeLinearity: 0.25 });
+            
+            const markerObj = markers.find(m => m.id === id);
+            if (markerObj) {
+                // Ensure popup opens after map finishes moving to avoid visual glitch
+                setTimeout(() => {
+                    markerObj.marker.openPopup();
+                }, 1000);
+            }
+
+            // 3. Mobile handling: hide sidebar after selection
+            if (window.innerWidth < 640) {
+                toggleSidebar(false);
+            }
+        }
+
+        function filterData() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const activeRegionBtn = document.querySelector('.filter-btn.active');
+            const region = activeRegionBtn ? activeRegionBtn.dataset.region : 'all';
+
+            const filteredShops = shops.filter(shop => {
+                const matchesSearch = shop.name.toLowerCase().includes(searchTerm) || 
+                                      shop.city.toLowerCase().includes(searchTerm) || 
+                                      shop.signature.toLowerCase().includes(searchTerm);
+                const matchesRegion = region === 'all' || shop.region === region;
+                return matchesSearch && matchesRegion;
+            });
+
+            renderData(filteredShops);
+        }
+
+        function renderData(data) {
+            renderMarkers(data);
+            renderList(data);
+            
+            // Adjust map bounds if more than 1 result
+            if (data.length > 1) {
+                const bounds = L.latLngBounds(data.map(s => [s.lat, s.lng]));
+                // Ensure the map container size is updated before flying
+                map.invalidateSize();
+                // Use standard padding. Excessive padding on smaller screens causes negative size calculations (NaN errors).
+                map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 12, duration: 1 });
+            } else if (data.length === 1) {
+                map.flyTo([data[0].lat, data[0].lng], 14);
+            }
+        }
+
+        const sidebar = document.getElementById('sidebar');
+        
+        function toggleSidebar(forceState) {
+            if (typeof forceState === 'boolean') {
+                if (forceState) sidebar.classList.remove('-translate-x-full');
+                else sidebar.classList.add('-translate-x-full');
+            } else {
+                sidebar.classList.toggle('-translate-x-full');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+
+            // Setup Search
+            document.getElementById('search-input').addEventListener('input', filterData);
+
+            // Setup Region Filters
+            const filterBtns = document.querySelectorAll('.filter-btn');
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    filterBtns.forEach(b => {
+                        b.classList.remove('active', 'bg-matcha-600', 'text-white');
+                        b.classList.add('bg-gray-100', 'text-gray-600');
+                    });
+                    
+                    e.target.classList.remove('bg-gray-100', 'text-gray-600');
+                    e.target.classList.add('active', 'bg-matcha-600', 'text-white');
+
+                    filterData();
+                });
+            });
+
+            // Mobile Sidebar toggles
+            document.getElementById('mobile-menu-btn').addEventListener('click', toggleSidebar);
+            document.getElementById('close-sidebar-btn').addEventListener('click', toggleSidebar);
+
+            // User location feature
+            document.getElementById('locate-btn').addEventListener('click', () => {
+                if (!navigator.geolocation) {
+                    alert('您的瀏覽器不支援地理位置定位功能。');
+                    return;
+                }
+                
+                const btnIcon = document.querySelector('#locate-btn i');
+                btnIcon.classList.remove('fa-location-crosshairs');
+                btnIcon.classList.add('fa-spinner', 'fa-spin');
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        map.flyTo([lat, lng], 13);
+                        
+                        // Add a simple marker for user
+                        L.circleMarker([lat, lng], {
+                            radius: 8,
+                            fillColor: "#3b82f6",
+                            color: "#ffffff",
+                            weight: 3,
+                            opacity: 1,
+                            fillOpacity: 1
+                        }).addTo(map).bindPopup("您的位置").openPopup();
+
+                        btnIcon.classList.remove('fa-spinner', 'fa-spin');
+                        btnIcon.classList.add('fa-location-crosshairs', 'text-blue-500');
+                    },
+                    (error) => {
+                        btnIcon.classList.remove('fa-spinner', 'fa-spin');
+                        btnIcon.classList.add('fa-location-crosshairs');
+                        console.error('Error getting location:', error);
+                        // Using custom styled notification instead of alert
+                        const hint = document.getElementById('map-hint');
+                        hint.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-500"></i> 無法取得定位權限';
+                        hint.style.opacity = '1';
+                        setTimeout(() => hint.style.opacity = '0', 3000);
+                    }
+                );
+            });
+
+            // Handle window resize for Leaflet map recalculation
+            window.addEventListener('resize', () => {
+                map.invalidateSize();
+                if (window.innerWidth >= 640) {
+                    sidebar.classList.remove('-translate-x-full');
+                } else {
+                    sidebar.classList.add('-translate-x-full');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

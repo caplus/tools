@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個資假名化工具 (Local Data Pseudonymization)</title>
+    <!-- 引入 Tailwind CSS 以便快速設計樣式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 PapaParse 用於處理 CSV 檔案 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- 引入 SheetJS (xlsx) 用於處理 Excel 檔案 (雖然此範例主要以 CSV 示範，但加入函式庫以備擴充) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+        }
+        .container-box {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #e5e7eb; /* Tailwind gray-200 */
+            padding: 0.5rem;
+            text-align: left;
+        }
+        th {
+            background-color: #f9fafb; /* Tailwind gray-50 */
+            font-weight: 600;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .checkbox-label input {
+            margin-right: 0.5rem;
+        }
+        
+        /* 隱藏預設的檔案上傳按鈕，使用自訂按鈕 */
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .custom-file-upload:hover {
+            background-color: #2563eb; /* blue-600 */
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="text-gray-800 p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">🛡️ 本地端個資假名化工具</h1>
+            <p class="text-gray-600">保護敏感資料。在您的瀏覽器中進行處理，資料不會上傳到任何伺服器。</p>
+        </header>
+
+        <div class="container-box" id="step1-container">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">第一步：上傳資料檔案 (CSV/Excel)</h2>
+            <div class="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <label for="fileInput" class="custom-file-upload mb-2">
+                    選擇檔案
+                </label>
+                <input type="file" id="fileInput" accept=".csv, .xlsx, .xls">
+                <p class="text-sm text-gray-500 mt-2" id="fileNameDisplay">尚未選擇檔案。支援 CSV, XLSX 格式。</p>
+                
+                <!-- 新增：工作表選擇器 (預設為隱藏) -->
+                <div id="sheetSelectorContainer" class="hidden mt-4 flex flex-col items-center justify-center gap-2 w-full max-w-xs">
+                    <label for="sheetSelect" class="text-sm font-medium text-gray-700">選擇要處理的工作表：</label>
+                    <select id="sheetSelect" class="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-white">
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="container-box hidden" id="step2-container">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">第二步：選擇要假名化的欄位</h2>
+            <p class="text-sm text-gray-600 mb-4">請勾選包含敏感資訊（如姓名、身分證字號、電話、Email等）的欄位。系統將為這些欄位產生對應的匿名代碼。</p>
+            
+            <div id="columnCheckboxes" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <!-- Checkboxes will be generated here dynamically -->
+            </div>
+
+            <div class="flex justify-end">
+                <button id="processBtn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded shadow transition duration-200" disabled>
+                    執行假名化處理
+                </button>
+            </div>
+        </div>
+
+        <div class="container-box hidden" id="step3-container">
+            <h2 class="text-xl font-semibold mb-4 text-green-700">✅ 處理完成</h2>
+            <p class="text-sm text-gray-600 mb-6">資料已成功假名化。請下載處理後的資料與對照表。</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Download Anonymized Data -->
+                <div class="border border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center bg-blue-50">
+                    <h3 class="font-semibold text-lg mb-2">📄 假名化資料檔</h3>
+                    <p class="text-sm text-gray-500 mb-4 text-center">包含已替換為代碼的敏感欄位。此檔案可供分析或分享使用。</p>
+                    <button id="downloadDataBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition duration-200">
+                        下載 CSV
+                    </button>
+                </div>
+
+                <!-- Download Mapping Table -->
+                <div class="border border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center bg-purple-50">
+                    <h3 class="font-semibold text-lg mb-2">🔐 對照表 (Mapping Table)</h3>
+                    <p class="text-sm text-gray-500 mb-4 text-center">包含真實資料與匿名代碼的對應關係。<strong>請妥善保管此檔案，切勿外洩！</strong></p>
+                    <button id="downloadMapBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded transition duration-200">
+                        下載對照表 CSV
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-8">
+                 <button id="resetBtn" class="text-gray-600 hover:text-gray-900 underline text-sm">
+                    處理新檔案
+                </button>
+            </div>
+        </div>
+        
+        <div class="container-box hidden" id="preview-container">
+            <h2 class="text-lg font-semibold mb-4 text-gray-800">資料預覽 (前 5 筆)</h2>
+            <div class="overflow-x-auto">
+                <table id="previewTable" class="text-sm">
+                    <thead>
+                        <tr id="previewTableHead">
+                            <!-- Headers go here -->
+                        </tr>
+                    </thead>
+                    <tbody id="previewTableBody">
+                        <!-- Rows go here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // State variables
+        let originalData = [];
+        let headers = [];
+        let selectedColumns = [];
+        let anonymizedData = [];
+        let mappingTable = {}; // Structure: { columnName: { originalValue: anonymizedValue, ... } }
+        let counters = {}; // Keep track of IDs for each column: { columnName: 1 }
+        let currentWorkbook = null; // 新增：儲存目前的 Excel workbook 物件
+
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const step2Container = document.getElementById('step2-container');
+        const step3Container = document.getElementById('step3-container');
+        const previewContainer = document.getElementById('preview-container');
+        const columnCheckboxesContainer = document.getElementById('columnCheckboxes');
+        const processBtn = document.getElementById('processBtn');
+        const downloadDataBtn = document.getElementById('downloadDataBtn');
+        const downloadMapBtn = document.getElementById('downloadMapBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        // 新增：工作表選擇器的 DOM 元素
+        const sheetSelectorContainer = document.getElementById('sheetSelectorContainer');
+        const sheetSelect = document.getElementById('sheetSelect');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileNameDisplay.textContent = `已選擇檔案: ${file.name}`;
+            
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+
+            if (fileExtension === 'csv') {
+                processCSV(file);
+            } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+                processExcel(file);
+            } else {
+                alert('不支援的檔案格式，請上傳 CSV 或 Excel 檔案。');
+                resetTool();
+            }
+        });
+
+        function processCSV(file) {
+            sheetSelectorContainer.classList.add('hidden'); // 處理 CSV 時隱藏工作表選擇器
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        originalData = results.data;
+                        headers = Object.keys(originalData[0]);
+                        setupColumnSelection();
+                        renderPreview(originalData);
+                        step2Container.classList.remove('hidden');
+                        previewContainer.classList.remove('hidden');
+                        step3Container.classList.add('hidden');
+                    } else {
+                        alert('檔案看起來是空的或無法解析。');
+                    }
+                },
+                error: function(error) {
+                    console.error("Error parsing CSV:", error);
+                    alert("解析 CSV 檔案時發生錯誤。");
+                }
+            });
+        }
+
+        function processExcel(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    currentWorkbook = XLSX.read(data, {type: 'array'});
+                    
+                    // 填入工作表下拉選單選項
+                    sheetSelect.innerHTML = '';
+                    currentWorkbook.SheetNames.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        sheetSelect.appendChild(option);
+                    });
+
+                    // 若超過一個工作表，則顯示下拉選單
+                    if (currentWorkbook.SheetNames.length > 1) {
+                        sheetSelectorContainer.classList.remove('hidden');
+                    } else {
+                        sheetSelectorContainer.classList.add('hidden');
+                    }
+                    
+                    // 預設載入第一個工作表的資料
+                    loadSheetData(currentWorkbook.SheetNames[0]);
+                    
+                } catch (error) {
+                    console.error("Error parsing Excel:", error);
+                    alert("解析 Excel 檔案時發生錯誤。");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 新增：處理特定工作表資料的函式
+        function loadSheetData(sheetName) {
+            if (!currentWorkbook) return;
+            const worksheet = currentWorkbook.Sheets[sheetName];
+            
+            // 轉換工作表為 JSON 陣列
+            const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+            
+            if (json && json.length > 0) {
+                originalData = json;
+                headers = Object.keys(originalData[0]);
+                setupColumnSelection();
+                renderPreview(originalData);
+                step2Container.classList.remove('hidden');
+                previewContainer.classList.remove('hidden');
+                step3Container.classList.add('hidden');
+            } else {
+                alert(`工作表 "${sheetName}" 似乎沒有資料。`);
+                // 清空預覽與選項
+                originalData = [];
+                headers = [];
+                setupColumnSelection();
+                renderPreview([]);
+                step2Container.classList.add('hidden');
+                previewContainer.classList.add('hidden');
+            }
+        }
+
+        // 新增：監聽工作表切換事件
+        sheetSelect.addEventListener('change', function(e) {
+            loadSheetData(e.target.value);
+            // 若使用者切換工作表，重置完成狀態與按鈕
+            step3Container.classList.add('hidden');
+        });
+
+        function setupColumnSelection() {
+            columnCheckboxesContainer.innerHTML = '';
+            selectedColumns = [];
+            
+            headers.forEach(header => {
+                const div = document.createElement('div');
+                
+                const label = document.createElement('label');
+                label.className = 'checkbox-label text-sm text-gray-700';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = header;
+                checkbox.className = 'w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500';
+                
+                // Add event listener to manage selected columns state
+                checkbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        if (!selectedColumns.includes(this.value)) {
+                            selectedColumns.push(this.value);
+                        }
+                    } else {
+                        selectedColumns = selectedColumns.filter(col => col !== this.value);
+                    }
+                    // Enable/disable process button based on selection
+                    processBtn.disabled = selectedColumns.length === 0;
+                });
+                
+                const span = document.createElement('span');
+                span.textContent = header;
+                span.className = 'truncate block w-full';
+                span.title = header; // Tooltip for long names
+                
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                div.appendChild(label);
+                columnCheckboxesContainer.appendChild(div);
+            });
+            
+            processBtn.disabled = true; // Initially disabled
+        }
+
+        function renderPreview(data, isAnonymized = false) {
+            const thead = document.getElementById('previewTableHead');
+            const tbody = document.getElementById('previewTableBody');
+            
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            
+            if (headers.length === 0) return;
+
+            // Render headers
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                // Highlight selected columns in preview if it's the anonymized view
+                if (isAnonymized && selectedColumns.includes(header)) {
+                    th.classList.add('bg-green-100', 'text-green-800');
+                    th.title = "已假名化欄位";
+                }
+                thead.appendChild(th);
+            });
+
+            // Render up to 5 rows
+            const previewCount = Math.min(5, data.length);
+            for (let i = 0; i < previewCount; i++) {
+                const row = data[i];
+                const tr = document.createElement('tr');
+                
+                headers.forEach(header => {
+                    const td = document.createElement('td');
+                    td.textContent = row[header] !== undefined && row[header] !== null ? row[header] : '';
+                    
+                    // Highlight anonymized values
+                    if (isAnonymized && selectedColumns.includes(header)) {
+                        td.classList.add('bg-green-50', 'text-gray-500', 'font-mono');
+                    }
+                    tr.appendChild(td);
+                });
+                
+                tbody.appendChild(tr);
+            }
+        }
+
+        processBtn.addEventListener('click', function() {
+            if (selectedColumns.length === 0) {
+                alert('請至少選擇一個需要假名化的欄位。');
+                return;
+            }
+
+            // Reset mapping and counters
+            mappingTable = {};
+            counters = {};
+            selectedColumns.forEach(col => {
+                mappingTable[col] = {};
+                counters[col] = 1;
+            });
+
+            // Create a deep copy of original data
+            anonymizedData = JSON.parse(JSON.stringify(originalData));
+
+            // Process each row
+            anonymizedData.forEach(row => {
+                selectedColumns.forEach(col => {
+                    const originalValue = row[col];
+                    
+                    // Skip empty values, maybe we don't want to anonymize empty strings
+                    if (originalValue === null || originalValue === undefined || originalValue.toString().trim() === '') {
+                        return; 
+                    }
+                    
+                    const valueStr = originalValue.toString();
+
+                    // If we haven't seen this value in this column before, create a new ID
+                    if (!mappingTable[col].hasOwnProperty(valueStr)) {
+                        // Generate an ID, e.g., P_姓名_001
+                        // To keep it simple but somewhat obfuscated, we just use a prefix and counter
+                        const prefix = `ID_${col.substring(0,3)}_`; 
+                        const newId = `ANON-${counters[col]}`; 
+                        mappingTable[col][valueStr] = newId;
+                        counters[col]++;
+                    }
+
+                    // Replace the value with the anonymous ID
+                    row[col] = mappingTable[col][valueStr];
+                });
+            });
+
+            // Update UI
+            step2Container.classList.add('hidden');
+            step3Container.classList.remove('hidden');
+            
+            // Update preview to show anonymized data
+            document.querySelector('#preview-container h2').textContent = "假名化結果預覽 (前 5 筆)";
+            renderPreview(anonymizedData, true);
+        });
+
+        // Helper function to trigger CSV download
+        function downloadCSV(csvContent, filename) {
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel UTF-8 display
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        downloadDataBtn.addEventListener('click', function() {
+            if (anonymizedData.length === 0) return;
+            const csv = Papa.unparse(anonymizedData);
+            const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+            downloadCSV(csv, `anonymized_data_${dateStr}.csv`);
+        });
+
+        downloadMapBtn.addEventListener('click', function() {
+            if (Object.keys(mappingTable).length === 0) return;
+            
+            // Transform mapping table into a flat format for CSV
+            // Columns: ColumnName, OriginalValue, AnonymizedID
+            const mapArray = [];
+            for (const [colName, mappings] of Object.entries(mappingTable)) {
+                for (const [original, anonId] of Object.entries(mappings)) {
+                    mapArray.push({
+                        '原欄位名稱 (Column Name)': colName,
+                        '匿名代碼 (Anonymized ID)': anonId,
+                        '真實資料 (Original Value)': original
+                    });
+                }
+            }
+            
+            const csv = Papa.unparse(mapArray);
+            const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+            downloadCSV(csv, `mapping_table_${dateStr}.csv`);
+        });
+
+        resetBtn.addEventListener('click', resetTool);
+
+        function resetTool() {
+            originalData = [];
+            headers = [];
+            selectedColumns = [];
+            anonymizedData = [];
+            mappingTable = {};
+            currentWorkbook = null;
+            
+            fileInput.value = '';
+            fileNameDisplay.textContent = '尚未選擇檔案。支援 CSV, XLSX 格式。';
+            sheetSelectorContainer.classList.add('hidden');
+            sheetSelect.innerHTML = '';
+            
+            step1Container.classList.remove('hidden');
+            step2Container.classList.add('hidden');
+            step3Container.classList.add('hidden');
+            previewContainer.classList.add('hidden');
+            
+            document.querySelector('#preview-container h2').textContent = "資料預覽 (前 5 筆)";
+        }
+    </script>
+</body>
+</html>

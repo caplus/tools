@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歐洲旅遊景點互動地圖</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Custom Styles for Map and UI */
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 10;
+        }
+        
+        .custom-popup .leaflet-popup-content-wrapper {
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .custom-popup .leaflet-popup-content {
+            margin: 0;
+            width: 250px !important;
+        }
+        
+        .custom-popup .leaflet-popup-tip {
+            background-color: #ffffff;
+        }
+
+        /* Marker animation */
+        .leaflet-marker-icon {
+            transition: transform 0.2s;
+        }
+        .leaflet-marker-icon:hover {
+            transform: scale(1.1);
+        }
+
+        /* Scrollbar styling for sidebar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen w-screen overflow-hidden flex flex-col font-sans text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white shadow-md z-20 flex-shrink-0">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-earth-europe text-2xl"></i>
+                <h1 class="text-xl font-bold tracking-tight">歐洲精選旅遊地圖</h1>
+            </div>
+            <div class="hidden sm:block text-indigo-100 text-sm">
+                探索最迷人的歐洲地標
+            </div>
+            <!-- Mobile Menu Button (Hamburger) - Not fully functional in this basic setup but ready for expansion -->
+            <button id="mobile-menu-btn" class="sm:hidden p-2 rounded-md hover:bg-indigo-500 focus:outline-none">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- Sidebar: List of Attractions -->
+        <aside id="sidebar" class="w-full sm:w-80 md:w-96 bg-white shadow-xl z-20 flex flex-col absolute sm:relative h-full transition-transform duration-300 ease-in-out transform -translate-x-full sm:translate-x-0">
+            
+            <!-- Filters & Search -->
+            <div class="p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                <div class="relative">
+                    <input type="text" id="search-input" placeholder="搜尋景點或國家..." class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow text-sm">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400"></i>
+                </div>
+                <div class="mt-3 flex gap-2 overflow-x-auto pb-1 hide-scroll" id="category-filters">
+                    <button class="filter-btn active px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-full whitespace-nowrap" data-category="all">全部</button>
+                    <button class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium rounded-full whitespace-nowrap" data-category="歷史">歷史遺跡</button>
+                    <button class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium rounded-full whitespace-nowrap" data-category="建築">著名建築</button>
+                    <button class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium rounded-full whitespace-nowrap" data-category="自然">自然風光</button>
+                </div>
+            </div>
+
+            <!-- Attractions List -->
+            <div class="flex-1 overflow-y-auto p-2" id="attractions-list">
+                <!-- List items will be injected here by JS -->
+            </div>
+            
+            <!-- Mobile Close Button for Sidebar -->
+            <button id="close-sidebar-btn" class="sm:hidden absolute top-2 right-2 p-2 text-gray-500 bg-white rounded-full shadow-md z-30">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </aside>
+
+        <!-- Map Container -->
+        <main class="flex-1 relative w-full h-full">
+            <div id="map"></div>
+            
+            <!-- Map Overlay Controls (Custom zoom buttons etc could go here, but Leaflet provides defaults) -->
+            <div class="absolute bottom-6 right-6 z-[1000] bg-white p-2 rounded-lg shadow-lg text-xs text-gray-600 border border-gray-200 pointer-events-none opacity-80">
+                <i class="fa-solid fa-circle-info mr-1 text-indigo-500"></i> 點擊標記查看詳情
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Tourist Attractions Data
+        const attractions = [
+            {
+                id: 1,
+                name: "艾菲爾鐵塔",
+                city: "巴黎",
+                country: "法國",
+                lat: 48.8584,
+                lng: 2.2945,
+                category: "建築",
+                image: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "巴黎最具代表性的地標，建於1889年。無論是白天欣賞其鋼鐵結構，還是夜晚觀看閃爍燈光，都令人難忘。"
+            },
+            {
+                id: 2,
+                name: "羅馬競技場",
+                city: "羅馬",
+                country: "義大利",
+                lat: 41.8902,
+                lng: 12.4922,
+                category: "歷史",
+                image: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "古羅馬時期最大的圓形角鬥場，是古羅馬帝國標誌性的建築物之一，感受兩千年前的震撼歷史。"
+            },
+            {
+                id: 3,
+                name: "聖家堂",
+                city: "巴塞隆納",
+                country: "西班牙",
+                lat: 41.4036,
+                lng: 2.1744,
+                category: "建築",
+                image: "https://images.unsplash.com/photo-1583501062058-2946c59b21fa?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "天才建築師高第的未完成傑作，結合了哥德式和新藝術運動的風格，內部光影變幻莫測。"
+            },
+            {
+                id: 4,
+                name: "倫敦眼",
+                city: "倫敦",
+                country: "英國",
+                lat: 51.5033,
+                lng: -0.1197,
+                category: "建築",
+                image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "位於泰晤士河畔的巨型摩天輪，為慶祝千禧年而建，是俯瞰倫敦市區全景的絕佳地點。"
+            },
+            {
+                id: 5,
+                name: "新天鵝堡",
+                city: "施萬高",
+                country: "德國",
+                lat: 47.5576,
+                lng: 10.7498,
+                category: "建築",
+                image: "https://images.unsplash.com/photo-1557007558-7f9994c5025d?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "建於19世紀晚期的浪漫主義建築，據說是迪士尼城堡的原型，坐落於阿爾卑斯山脈中，宛如童話。"
+            },
+            {
+                id: 6,
+                name: "雅典衛城",
+                city: "雅典",
+                country: "希臘",
+                lat: 37.9715,
+                lng: 23.7267,
+                category: "歷史",
+                image: "https://images.unsplash.com/photo-1603565816030-6b389eeb23cb?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "古希臘文明的象徵，包含帕德嫩神廟等多座重要古蹟，屹立於雅典市中心的山丘上。"
+            },
+            {
+                id: 7,
+                name: "阿姆斯特丹運河",
+                city: "阿姆斯特丹",
+                country: "荷蘭",
+                lat: 52.3676,
+                lng: 4.9041,
+                category: "自然", // Arguably man-made but fits the vibe
+                image: "https://images.unsplash.com/photo-1534351590666-13e3e96b5017?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "被譽為「北方威尼斯」，17世紀開鑿的運河網是阿姆斯特丹的靈魂，乘船遊覽是最佳體驗方式。"
+            },
+            {
+                id: 8,
+                name: "查理大橋",
+                city: "布拉格",
+                country: "捷克",
+                lat: 50.0865,
+                lng: 14.4114,
+                category: "歷史",
+                image: "https://images.unsplash.com/photo-1519677100203-a0e668c92439?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "橫跨伏爾塔瓦河的歷史名橋，建於14世紀，兩側裝飾著眾多巴洛克風格雕塑，充滿浪漫氣息。"
+            },
+            {
+                id: 9,
+                name: "普利特維采湖群 (十六湖)",
+                city: "利卡-塞尼",
+                country: "克羅埃西亞",
+                lat: 44.8654,
+                lng: 15.5820,
+                category: "自然",
+                image: "https://images.unsplash.com/photo-1579781354199-1216d015b67e?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "歐洲最美的國家公園之一，以其錯落有致的湖泊、瀑布和清澈見底的翠綠湖水聞名於世。"
+            },
+             {
+                id: 10,
+                name: "阿爾罕布拉宮",
+                city: "格拉納達",
+                country: "西班牙",
+                lat: 37.1760,
+                lng: -3.5881,
+                category: "歷史",
+                image: "https://images.unsplash.com/photo-1566807810030-3eaa60f3e670?auto=format&fit=crop&q=80&w=400&h=250",
+                description: "摩爾人留下的華麗宮殿與堡壘，展現了極致的伊斯蘭建築藝術與精緻的庭園設計。"
+            }
+        ];
+
+        let map;
+        let markers = [];
+        const mapCenter = [48.0, 10.0]; // Center of Europe roughly
+        const defaultZoom = 4;
+
+        // Initialize Map
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: false // We will move it
+            }).setView(mapCenter, defaultZoom);
+
+            // Add tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            // Move zoom control to top right
+            L.control.zoom({
+                position: 'topright'
+            }).addTo(map);
+
+            renderMarkers(attractions);
+            renderList(attractions);
+        }
+
+        // Custom Icon Creation
+        const getCustomIcon = (category) => {
+            let color = '#4f46e5'; // Indigo default
+            let iconClass = 'fa-location-dot';
+
+            if(category === '歷史') { color = '#b45309'; iconClass = 'fa-landmark'; } // Amber/Brown
+            else if(category === '建築') { color = '#0284c7'; iconClass = 'fa-building'; } // Sky Blue
+            else if(category === '自然') { color = '#15803d'; iconClass = 'fa-leaf'; } // Green
+
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color: ${color}; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; border-radius: 50%; color: white; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                            <i class="fa-solid ${iconClass} text-sm"></i>
+                       </div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            });
+        };
+
+        // Render Markers on Map
+        function renderMarkers(data) {
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            data.forEach(place => {
+                const marker = L.marker([place.lat, place.lng], {
+                    icon: getCustomIcon(place.category),
+                    title: place.name
+                }).addTo(map);
+
+                // Popup HTML
+                const popupContent = `
+                    <div class="flex flex-col">
+                        <img src="${place.image}" alt="${place.name}" class="w-full h-32 object-cover rounded-t-lg">
+                        <div class="p-3">
+                            <div class="flex justify-between items-start mb-1">
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">${place.name}</h3>
+                                <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded border border-gray-200 whitespace-nowrap">${place.category}</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-2"><i class="fa-solid fa-location-dot mr-1"></i>${place.city}, ${place.country}</p>
+                            <p class="text-sm text-gray-700 line-clamp-3">${place.description}</p>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent, {
+                    className: 'custom-popup'
+                });
+
+                // Add click event to marker to zoom in
+                marker.on('click', () => {
+                    map.flyTo([place.lat, place.lng], 12, {
+                        duration: 1.5
+                    });
+                    
+                    // Highlight corresponding list item
+                    highlightListItem(place.id);
+                });
+
+                markers.push(marker);
+            });
+        }
+
+        // Render Attractions List in Sidebar
+        function renderList(data) {
+            const listContainer = document.getElementById('attractions-list');
+            listContainer.innerHTML = '';
+
+            if (data.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-32 text-gray-400">
+                        <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
+                        <p>找不到符合的景點</p>
+                    </div>
+                `;
+                return;
+            }
+
+            data.forEach(place => {
+                const item = document.createElement('div');
+                item.className = 'list-item p-3 mb-2 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-200 cursor-pointer transition-all flex gap-3 group';
+                item.dataset.id = place.id;
+                
+                let iconColor = 'text-indigo-500';
+                if(place.category === '歷史') iconColor = 'text-amber-600';
+                else if(place.category === '建築') iconColor = 'text-sky-600';
+                else if(place.category === '自然') iconColor = 'text-green-600';
+
+                item.innerHTML = `
+                    <div class="w-20 h-20 flex-shrink-0 rounded-md overflow-hidden bg-gray-200">
+                        <img src="${place.image}" alt="${place.name}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                    </div>
+                    <div class="flex-1 flex flex-col justify-between overflow-hidden">
+                        <div>
+                            <h4 class="font-semibold text-gray-800 text-sm truncate" title="${place.name}">${place.name}</h4>
+                            <p class="text-xs text-gray-500 truncate mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>${place.city}, ${place.country}</p>
+                        </div>
+                        <div class="flex justify-between items-center mt-1">
+                            <span class="text-[10px] font-medium ${iconColor} bg-gray-50 px-1.5 py-0.5 rounded">${place.category}</span>
+                        </div>
+                    </div>
+                `;
+
+                item.addEventListener('click', () => {
+                    // Find marker
+                    const marker = markers.find(m => m.options.title === place.name);
+                    if (marker) {
+                        map.flyTo([place.lat, place.lng], 13, { duration: 1.5 });
+                        setTimeout(() => marker.openPopup(), 1500); // Open popup after flying
+                    }
+                    highlightListItem(place.id);
+                    
+                    // On mobile, close sidebar after selecting
+                    if(window.innerWidth < 640) {
+                        toggleSidebar();
+                    }
+                });
+
+                listContainer.appendChild(item);
+            });
+        }
+
+        // Highlight active item in list
+        function highlightListItem(id) {
+            document.querySelectorAll('.list-item').forEach(item => {
+                if (parseInt(item.dataset.id) === id) {
+                    item.classList.add('border-indigo-400', 'bg-indigo-50/50');
+                    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    item.classList.remove('border-indigo-400', 'bg-indigo-50/50');
+                }
+            });
+        }
+
+        // Filtering and Searching Logic
+        function filterData() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const activeCategoryBtn = document.querySelector('.filter-btn.active');
+            const category = activeCategoryBtn ? activeCategoryBtn.dataset.category : 'all';
+
+            const filteredData = attractions.filter(place => {
+                const matchesSearch = place.name.toLowerCase().includes(searchTerm) || 
+                                      place.city.toLowerCase().includes(searchTerm) || 
+                                      place.country.toLowerCase().includes(searchTerm);
+                const matchesCategory = category === 'all' || place.category === category;
+                return matchesSearch && matchesCategory;
+            });
+
+            renderMarkers(filteredData);
+            renderList(filteredData);
+
+            // Fit map bounds if there are results
+            if(filteredData.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.flyToBounds(group.getBounds(), { padding: [50, 50], duration: 1 });
+            }
+        }
+
+        // Event Listeners setup
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+
+            // Search input event
+            document.getElementById('search-input').addEventListener('input', filterData);
+
+            // Category filter buttons
+            const filterBtns = document.querySelectorAll('.filter-btn');
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Update active styling
+                    filterBtns.forEach(b => {
+                        b.classList.remove('active', 'bg-indigo-600', 'text-white');
+                        b.classList.add('bg-gray-200', 'text-gray-700');
+                    });
+                    
+                    const clickedBtn = e.target;
+                    clickedBtn.classList.remove('bg-gray-200', 'text-gray-700');
+                    clickedBtn.classList.add('active', 'bg-indigo-600', 'text-white');
+
+                    filterData();
+                });
+            });
+
+            // Mobile Sidebar Toggle
+            const sidebar = document.getElementById('sidebar');
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+
+            function toggleSidebar() {
+                sidebar.classList.toggle('-translate-x-full');
+            }
+
+            mobileMenuBtn.addEventListener('click', toggleSidebar);
+            closeSidebarBtn.addEventListener('click', toggleSidebar);
+            
+            // Map click closes sidebar on mobile
+            map.on('click', () => {
+                if(window.innerWidth < 640 && !sidebar.classList.contains('-translate-x-full')) {
+                    toggleSidebar();
+                }
+            });
+            
+            // Re-adjust layout on resize
+            window.addEventListener('resize', () => {
+                 map.invalidateSize();
+                 if(window.innerWidth >= 640) {
+                     sidebar.classList.remove('-translate-x-full');
+                 } else {
+                     sidebar.classList.add('-translate-x-full');
+                 }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -160,11 +160,12 @@
               appId: "1:1033655544639:web:3cce2d4b5bce713a5f418a",
               measurementId: "G-RNHN2BZP0V"
             };
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'yoga-sub-app-123';
-            
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
             const db = getFirestore(app);
+            
+            // 在您自己的真實資料庫中，不需要複雜的路徑，直接指定集合名稱即可！
+            const getColRef = (colName) => collection(db, colName);
             dbInstance.current = { db, collection, doc, setDoc, updateDoc, deleteDoc, appId };
 
             // Setup DB Actions

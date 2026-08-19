@@ -73,7 +73,10 @@
       );
     };
 
-    //    const MOCK_USERS = [
+    // ==========================================
+    // 2. 初始測試資料 (Seeding Data)
+    // ==========================================
+    const MOCK_USERS = [
       { id: 'u1', name: '艾莉絲 (Alice)', avatar: 'https://i.pravatar.cc/150?u=u1', bio: '專職於空中瑜珈與皮拉提斯，曾於成吉思汗、dw yoga 擔任約聘教練。教學風格溫和，注重學員核心發力與安全。', skills: ['空中瑜珈', '皮拉提斯', '瑜珈輪'], bank_account: '台新(812) 2888-1234-5678' },
       { id: 'u2', name: '鮑伯 (Bob)', avatar: 'https://i.pravatar.cc/150?u=u2', bio: '熱愛高強度間歇與 Zumba，帶動氣氛能力極佳。證照：ACE-CPT, Zumba Basic 1。', skills: ['Zumba', '肌力訓練', 'TRX'], bank_account: '國泰(013) 0000-9876-5432' },
       { id: 'u3', name: '克洛伊 (Chloe)', avatar: 'https://i.pravatar.cc/150?u=u3', bio: '十年瑜珈教學經驗，擅長陰瑜珈、流瑜珈。', skills: ['流瑜珈', '陰瑜珈'], bank_account: '玉山(808) 1111-2222-3333' }
@@ -89,11 +92,19 @@
       { id: 'a3', class_id: 'c2', applicant_id: 'u2', status: 'ACCEPTED', waitlist_order: null }
     ];
 
+    const INITIAL_MESSAGES = [
+      { id: 'm1', class_id: 'c1', sender_id: 'u2', content: '請問這堂課初學者多嗎？', is_deleted: false, timestamp: Date.now() - 3600000 },
+      { id: 'm2', class_id: 'c1', sender_id: 'u1', content: '大部分是上過幾次的新手，不會太難！', is_deleted: false, timestamp: Date.now() - 3500000 }
+    ];
+
     const INITIAL_REVIEWS = [
       { id: 'r1', class_id: 'c2', reviewer_id: 'u3', reviewee_id: 'u2', rating: 5, tags: ['準時', '學生反應極佳'], comment: 'Bob老師超會帶氣氛！' }
     ];
 
-    //    const getTodayStr = () => new Date().toISOString().split('T')[0];
+    // ==========================================
+    // 3. 系統輔助函數
+    // ==========================================
+    const getTodayStr = () => new Date().toISOString().split('T')[0];
 
     const getUserRating = (userId, allReviews) => {
       const userReviews = allReviews.filter(r => r.reviewee_id === userId);
@@ -118,139 +129,158 @@
       return { text: '徵求中', style: 'bg-pink-100 text-pink-600' };
     };
 
-    //    function App() {
-      // Data State
+    // ==========================================
+    // 4. 核心系統元件 (App)
+    // ==========================================
+    function App() {
       const [users, setUsers] = useState([]);
       const [classes, setClasses] = useState([]);
       const [applications, setApplications] = useState([]);
       const [messages, setMessages] = useState([]);
       const [reviews, setReviews] = useState([]);
       
-      // UI State
-      const [currentUserId, setCurrentUserId] = useState('u1'); // Default test user
+      const [currentUserId, setCurrentUserId] = useState('u1');
       const [currentView, setCurrentView] = useState('BOARD'); 
       const [selectedClassId, setSelectedClassId] = useState(null);
       const [toast, setToast] = useState(null);
       const [confirmDialog, setConfirmDialog] = useState(null);
       
-      // Firebase State
       const [isInitializing, setIsInitializing] = useState(true);
+      const [isCloud, setIsCloud] = useState(false);
       const [dbActions, setDbActions] = useState(null);
-      const [authUser, setAuthUser] = useState(null);
       const dbInstance = useRef(null);
 
-      // --- Firebase Initialization & Authentication ---
+      // --- 智慧降級機制 (Firebase or LocalStorage) ---
       useEffect(() => {
         let unsubscribes = [];
         
-        const initFirebase = async () => {
+        // 【1. 如果您未來申請了 Firebase，請把設定貼入下方物件中】
+        const myFirebaseConfig = = {
+            apiKey: "AIzaSyCARgXIaT6tPJrHI91M65u7IclViaWwuBk",
+            authDomain: "find-teacher-1a48a.firebaseapp.com",
+            projectId: "find-teacher-1a48a",
+            storageBucket: "find-teacher-1a48a.firebasestorage.app",
+            messagingSenderId: "1033655544639",
+            appId: "1:1033655544639:web:3cce2d4b5bce713a5f418a",
+            measurementId: "G-RNHN2BZP0V"
+          };
+        const initDB = async () => {
           try {
-            // Import Firebase SDKs dynamically
-            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js');
-            const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js');
-            const { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
-            
-            // const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-            const appId = typeof __app_id !== 'undefined' ? __app_id : "1:1033655544639:web:3cce2d4b5bce713a5f418a";
-            
-            // const app = initializeApp(firebaseConfig);
-            // const auth = getAuth(app);
-            // const db = getFirestore(app);
-            dbInstance.current = { db, collection, doc, setDoc, updateDoc, deleteDoc, appId };
+            const injectedConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            const configToUse = injectedConfig || myFirebaseConfig;
 
-            // Setup DB Actions
-            // const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
-            const firebaseConfig = {
-              apiKey: "AIzaSyCARgXIaT6tPJrHI91M65u7IclViaWwuBk",
-              authDomain: "find-teacher-1a48a.firebaseapp.com",
-              projectId: "find-teacher-1a48a",
-              storageBucket: "find-teacher-1a48a.firebasestorage.app",
-              messagingSenderId: "1033655544639",
-              appId: appId,
-              measurementId: "G-RNHN2BZP0V"
-            };
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const db = getFirestore(app);
-            
-            // 在您自己的真實資料庫中，不需要複雜的路徑，直接指定集合名稱即可！
-            const getColRef = (colName) => collection(db, colName);
-            setDbActions({
-              addClass: async (data) => await setDoc(getDocRef('classes', data.id), data),
-              updateClass: async (id, data) => await updateDoc(getDocRef('classes', id), data),
-              deleteClass: async (id) => await deleteDoc(getDocRef('classes', id)),
-              addApp: async (data) => await setDoc(getDocRef('applications', data.id), data),
-              updateApp: async (id, data) => await updateDoc(getDocRef('applications', id), data),
-              addMsg: async (data) => await setDoc(getDocRef('messages', data.id), data),
-              updateMsg: async (id, data) => await updateDoc(getDocRef('messages', id), data),
-              addReview: async (data) => await setDoc(getDocRef('reviews', data.id), data),
-              updateUser: async (id, data) => await updateDoc(getDocRef('users', id), data)
-            });
+            if (configToUse && Object.keys(configToUse).length > 0) {
+              // 雲端模式 (Firebase)
+              const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js');
+              const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js');
+              const { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+              
+              const appId = typeof __app_id !== 'undefined' ? __app_id : 'yoga-sub-app-123';
+              const app = initializeApp(configToUse);
+              const auth = getAuth(app);
+              const db = getFirestore(app);
+              dbInstance.current = { db, collection, doc, setDoc, updateDoc, deleteDoc, appId };
 
-            // Authenticate
-            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-            if (token) {
-              await signInWithCustomToken(auth, token);
+              const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
+              
+              setDbActions({
+                addClass: async (data) => await setDoc(getDocRef('classes', data.id), data),
+                updateClass: async (id, data) => await updateDoc(getDocRef('classes', id), data),
+                deleteClass: async (id) => await deleteDoc(getDocRef('classes', id)),
+                addApp: async (data) => await setDoc(getDocRef('applications', data.id), data),
+                updateApp: async (id, data) => await updateDoc(getDocRef('applications', id), data),
+                addMsg: async (data) => await setDoc(getDocRef('messages', data.id), data),
+                updateMessage: async (id, data) => await updateDoc(getDocRef('messages', id), data),
+                addReview: async (data) => await setDoc(getDocRef('reviews', data.id), data),
+                updateUser: async (id, data) => await updateDoc(getDocRef('users', id), data)
+              });
+
+              // 驗證
+              const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+              if (token) await signInWithCustomToken(auth, token);
+              else await signInAnonymously(auth);
+
+              onAuthStateChanged(auth, (user) => {
+                if (user) {
+                  const getColRef = (colName) => collection(db, 'artifacts', appId, 'public', 'data', colName);
+                  unsubscribes.push(onSnapshot(getColRef('users'), (snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (data.length === 0) MOCK_USERS.forEach(u => setDoc(getDocRef('users', u.id), u));
+                    else { setUsers(data); setIsCloud(true); setIsInitializing(false); }
+                  }, (err) => { console.error(err); initLocalStorageMode(); }));
+                  unsubscribes.push(onSnapshot(getColRef('classes'), (snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (data.length === 0) INITIAL_CLASSES.forEach(c => setDoc(getDocRef('classes', c.id), c));
+                    else setClasses(data);
+                  }));
+                  unsubscribes.push(onSnapshot(getColRef('applications'), (snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (data.length === 0) INITIAL_APPLICATIONS.forEach(a => setDoc(getDocRef('applications', a.id), a));
+                    else setApplications(data);
+                  }));
+                  unsubscribes.push(onSnapshot(getColRef('messages'), (snap) => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
+                  unsubscribes.push(onSnapshot(getColRef('reviews'), (snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (data.length === 0) INITIAL_REVIEWS.forEach(r => setDoc(getDocRef('reviews', r.id), r));
+                    else setReviews(data);
+                  }));
+                }
+              });
             } else {
-              await signInAnonymously(auth);
+              initLocalStorageMode(); // 無 Firebase Config，觸發本地模式
             }
-
-            // Watch Auth State & Start DB Listeners
-            onAuthStateChanged(auth, (user) => {
-              setAuthUser(user);
-              if (user) {
-                const getColRef = (colName) => collection(db, 'artifacts', appId, 'public', 'data', colName);
-
-                // Listeners with Auto-Seeding
-                unsubscribes.push(onSnapshot(getColRef('users'), (snap) => {
-                  const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                  if (data.length === 0) { MOCK_USERS.forEach(u => setDoc(getDocRef('users', u.id), u)); } 
-                  else { setUsers(data); setIsInitializing(false); }
-                }, (err) => console.error(err)));
-
-                unsubscribes.push(onSnapshot(getColRef('classes'), (snap) => {
-                  const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                  if (data.length === 0) INITIAL_CLASSES.forEach(c => setDoc(getDocRef('classes', c.id), c));
-                  else setClasses(data);
-                }, (err) => console.error(err)));
-
-                unsubscribes.push(onSnapshot(getColRef('applications'), (snap) => {
-                  const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                  if (data.length === 0) INITIAL_APPLICATIONS.forEach(a => setDoc(getDocRef('applications', a.id), a));
-                  else setApplications(data);
-                }, (err) => console.error(err)));
-
-                unsubscribes.push(onSnapshot(getColRef('messages'), (snap) => {
-                  setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, (err) => console.error(err)));
-
-                unsubscribes.push(onSnapshot(getColRef('reviews'), (snap) => {
-                  const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                  if (data.length === 0) INITIAL_REVIEWS.forEach(r => setDoc(getDocRef('reviews', r.id), r));
-                  else setReviews(data);
-                }, (err) => console.error(err)));
-              }
-            });
-            
           } catch (err) {
-            console.error("Firebase init failed:", err);
+            console.error("Firebase init failed, switching to LocalStorage mode:", err);
+            initLocalStorageMode();
           }
         };
         
-        initFirebase();
+        initDB();
         return () => unsubscribes.forEach(unsub => unsub());
       }, []);
 
-      //      if (isInitializing) {
+      const initLocalStorageMode = () => {
+        const load = (key, initialData) => {
+          const stored = localStorage.getItem('yoga_app_' + key);
+          if (stored) return JSON.parse(stored);
+          localStorage.setItem('yoga_app_' + key, JSON.stringify(initialData));
+          return initialData;
+        };
+
+        setUsers(load('users', MOCK_USERS));
+        setClasses(load('classes', INITIAL_CLASSES));
+        setApplications(load('applications', INITIAL_APPLICATIONS));
+        setMessages(load('messages', INITIAL_MESSAGES));
+        setReviews(load('reviews', INITIAL_REVIEWS));
+
+        const save = (key, data) => localStorage.setItem('yoga_app_' + key, JSON.stringify(data));
+
+        setDbActions({
+          addClass: async (data) => { setClasses(p => { const n = [...p, data]; save('classes', n); return n; }); },
+          updateClass: async (id, data) => { setClasses(p => { const n = p.map(c => c.id === id ? { ...c, ...data } : c); save('classes', n); return n; }); },
+          deleteClass: async (id) => { setClasses(p => { const n = p.filter(c => c.id !== id); save('classes', n); return n; }); },
+          addApp: async (data) => { setApplications(p => { const n = [...p, data]; save('applications', n); return n; }); },
+          updateApp: async (id, data) => { setApplications(p => { const n = p.map(a => a.id === id ? { ...a, ...data } : a); save('applications', n); return n; }); },
+          addMsg: async (data) => { setMessages(p => { const n = [...p, data]; save('messages', n); return n; }); },
+          updateMessage: async (id, data) => { setMessages(p => { const n = p.map(m => m.id === id ? { ...m, ...data } : m); save('messages', n); return n; }); },
+          addReview: async (data) => { setReviews(p => { const n = [...p, data]; save('reviews', n); return n; }); },
+          updateUser: async (id, data) => { setUsers(p => { const n = p.map(u => u.id === id ? { ...u, ...data } : u); save('users', n); return n; }); }
+        });
+        
+        setIsCloud(false);
+        setIsInitializing(false);
+      };
+
+      if (isInitializing) {
         return (
           <div className="h-screen w-full flex flex-col items-center justify-center bg-pink-50">
             <LucideIcon name="Loader2" className="animate-spin text-pink-500 mb-4" size={48} />
-            <p className="text-gray-500 font-medium animate-pulse">連線至雲端資料庫中...</p>
+            <p className="text-gray-500 font-medium animate-pulse">正在初始化系統資料...</p>
           </div>
         );
       }
 
-      // 動態計算所有使用者的星級評等 (即時反應反饋結果)
+      // 動態計算使用者的最新星級
       const computedUsers = users.map(u => ({
         ...u,
         avg_rating: Number(getUserRating(u.id, reviews)),
@@ -258,107 +288,35 @@
       }));
       const currentUser = computedUsers.find(u => u.id === currentUserId) || computedUsers[0];
 
-      const showToast = (msg, type = 'success') => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 3000);
-      };
-
-      const showConfirm = (msg, onConfirm) => {
-        setConfirmDialog({ msg, onConfirm });
-      };
-
-      const navigateTo = (view, classId = null) => {
-        setCurrentView(view);
-        setSelectedClassId(classId);
-        window.scrollTo(0, 0);
-      };
-
       return (
         <div className="pb-20 md:pb-0 md:pl-20">
-          {/* Top Navigation & Test Role Switcher */}
           <header className="sticky top-0 z-40 bg-white/70 backdrop-blur-md shadow-sm px-4 py-3 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">
-                YogaSubstitute
-              </h1>
-              <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold">Cloud Sync 🟢</span>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">YogaSubstitute</h1>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isCloud ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {isCloud ? 'Cloud Sync 🟢' : 'Local Mode 🟡'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">測試身分:</span>
               <select 
                 className="text-sm bg-pink-100 text-pink-800 border-none rounded-full px-3 py-1 font-medium focus:ring-2 focus:ring-pink-300 outline-none cursor-pointer"
                 value={currentUserId}
-                onChange={(e) => {
-                  setCurrentUserId(e.target.value);
-                  navigateTo('BOARD');
-                }}
+                onChange={(e) => { setCurrentUserId(e.target.value); navigateTo('BOARD'); }}
               >
-                {computedUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
+                {computedUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
           </header>
 
-          {/* Main Content Area */}
           <main className="max-w-2xl mx-auto p-4">
-            {currentView === 'BOARD' && (
-              <BoardView 
-                classes={classes} 
-                users={computedUsers} 
-                onViewDetail={(id) => navigateTo('DETAIL', id)} 
-                currentUser={currentUser}
-              />
-            )}
-            {currentView === 'CREATE' && (
-              <CreateRequestView 
-                onPublish={async (newClass) => {
-                  await dbActions.addClass(newClass);
-                  navigateTo('BOARD');
-                }} 
-                currentUser={currentUser} 
-              />
-            )}
-            {currentView === 'PROFILE' && (
-              <ProfileView 
-                currentUser={currentUser} 
-                classes={classes}
-                applications={applications}
-                reviews={reviews}
-                users={computedUsers}
-                onViewDetail={(id) => navigateTo('DETAIL', id)}
-                onEditProfile={() => navigateTo('EDIT_PROFILE')}
-              />
-            )}
-            {currentView === 'EDIT_PROFILE' && (
-              <EditProfileView
-                currentUser={currentUser}
-                onSave={async (updatedUser) => {
-                  await dbActions.updateUser(updatedUser.id, updatedUser);
-                  navigateTo('PROFILE');
-                  showToast("資料已更新！");
-                }}
-                onCancel={() => navigateTo('PROFILE')}
-              />
-            )}
-            {currentView === 'DETAIL' && (
-              <ClassDetailView 
-                classId={selectedClassId}
-                classes={classes}
-                applications={applications}
-                messages={messages}
-                reviews={reviews}
-                users={computedUsers}
-                currentUser={currentUser}
-                onBack={() => navigateTo('BOARD')}
-                showToast={showToast}
-                showConfirm={showConfirm}
-                dbActions={dbActions}
-              />
-            )}
+            {currentView === 'BOARD' && <BoardView classes={classes} users={computedUsers} onViewDetail={(id) => navigateTo('DETAIL', id)} currentUser={currentUser} />}
+            {currentView === 'CREATE' && <CreateRequestView onPublish={async (newClass) => { await dbActions.addClass(newClass); navigateTo('BOARD'); }} currentUser={currentUser} />}
+            {currentView === 'PROFILE' && <ProfileView currentUser={currentUser} classes={classes} applications={applications} reviews={reviews} users={computedUsers} onViewDetail={(id) => navigateTo('DETAIL', id)} onEditProfile={() => navigateTo('EDIT_PROFILE')} />}
+            {currentView === 'EDIT_PROFILE' && <EditProfileView currentUser={currentUser} onSave={async (updatedUser) => { await dbActions.updateUser(updatedUser.id, updatedUser); navigateTo('PROFILE'); showToast("資料已更新！"); }} onCancel={() => navigateTo('PROFILE')} />}
+            {currentView === 'DETAIL' && <ClassDetailView classId={selectedClassId} classes={classes} applications={applications} messages={messages} reviews={reviews} users={computedUsers} currentUser={currentUser} onBack={() => navigateTo('BOARD')} showToast={showToast} showConfirm={showConfirm} dbActions={dbActions} />}
           </main>
 
-          {/* 全局 Toast 提示 */}
           {toast && (
             <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
               <div className={`flex items-center gap-2 px-5 py-3 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] border ${toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
@@ -368,13 +326,10 @@
             </div>
           )}
 
-          {/* 全局 Confirm Modal */}
           {confirmDialog && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
               <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-xl animate-in zoom-in-95 duration-200 text-center">
-                <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <LucideIcon name="AlertCircle" size={32} />
-                </div>
+                <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><LucideIcon name="AlertCircle" size={32} /></div>
                 <h3 className="text-lg font-bold text-gray-800 mb-2">確認操作</h3>
                 <p className="text-sm text-gray-600 mb-6">{confirmDialog.msg}</p>
                 <div className="flex gap-3">
@@ -385,7 +340,6 @@
             </div>
           )}
 
-          {/* Bottom Tab Navigation */}
           <nav className="fixed bottom-0 w-full md:w-20 md:h-screen md:top-0 md:left-0 bg-white border-t md:border-r md:border-t-0 border-pink-100 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-30">
             <div className="flex md:flex-col justify-around md:justify-start md:pt-20 items-center h-16 md:h-full px-2">
               <NavItem iconName="Home" label="大廳" active={currentView === 'BOARD' || currentView === 'DETAIL'} onClick={() => navigateTo('BOARD')} />
@@ -397,15 +351,10 @@
       );
     }
 
-    //    function NavItem({ iconName, label, active, onClick }) {
+    function NavItem({ iconName, label, active, onClick }) {
       return (
-        <button 
-          onClick={onClick}
-          className={`flex flex-col items-center justify-center w-16 h-full md:h-20 md:w-full transition-colors ${active ? 'text-pink-600' : 'text-gray-400 hover:text-pink-400'}`}
-        >
-          <div className={`${active ? 'bg-pink-100' : ''} p-1.5 rounded-full transition-all`}>
-            <LucideIcon name={iconName} size={active ? 24 : 22} />
-          </div>
+        <button onClick={onClick} className={`flex flex-col items-center justify-center w-16 h-full md:h-20 md:w-full transition-colors ${active ? 'text-pink-600' : 'text-gray-400 hover:text-pink-400'}`}>
+          <div className={`${active ? 'bg-pink-100' : ''} p-1.5 rounded-full transition-all`}><LucideIcon name={iconName} size={active ? 24 : 22} /></div>
           <span className="text-[10px] mt-1 font-medium">{label}</span>
         </button>
       );
@@ -414,65 +363,34 @@
     function BoardView({ classes, users, onViewDetail, currentUser }) {
       const [searchTerm, setSearchTerm] = useState('');
       const [filter, setFilter] = useState('ALL');
-      
-      let activeClasses = classes.filter(c => 
-        c.status === 'OPEN' && 
-        (c.course_name.includes(searchTerm) || c.location.includes(searchTerm))
-      );
-
-      if (filter === 'URGENT') {
-        activeClasses = activeClasses.filter(c => isUrgent(c.class_date, c.start_time));
-      } else if (filter === 'HIGH_PAY') {
-        activeClasses = activeClasses.filter(c => c.fee >= 1000);
-      }
-
+      let activeClasses = classes.filter(c => c.status === 'OPEN' && (c.course_name.includes(searchTerm) || c.location.includes(searchTerm)));
+      if (filter === 'URGENT') activeClasses = activeClasses.filter(c => isUrgent(c.class_date, c.start_time));
+      else if (filter === 'HIGH_PAY') activeClasses = activeClasses.filter(c => c.fee >= 1000);
       activeClasses.sort((a, b) => new Date(a.class_date) - new Date(b.class_date));
 
       return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
           <div className="bg-white p-3 rounded-2xl shadow-sm border border-pink-50 sticky top-16 z-20 space-y-3">
-            <input 
-              type="text" 
-              placeholder="搜尋課程名稱或地點..." 
-              className="w-full bg-gray-50 px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <input type="text" placeholder="搜尋課程名稱或地點..." className="w-full bg-gray-50 px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
               <button onClick={() => setFilter('ALL')} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filter === 'ALL' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'}`}>全部案件</button>
               <button onClick={() => setFilter('URGENT')} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-1 ${filter === 'URGENT' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-500'}`}><LucideIcon name="Flame" size={14}/> 急件優先</button>
               <button onClick={() => setFilter('HIGH_PAY')} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-1 ${filter === 'HIGH_PAY' ? 'bg-yellow-500 text-white' : 'bg-yellow-50 text-yellow-600'}`}><LucideIcon name="TrendingUp" size={14}/> 高時薪</button>
             </div>
           </div>
-
           <div className="space-y-4">
-            {activeClasses.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 bg-white rounded-3xl border border-dashed border-gray-200">目前沒有符合的代課需求</div>
-            ) : (
+            {activeClasses.length === 0 ? <div className="text-center py-10 text-gray-400 bg-white rounded-3xl border border-dashed border-gray-200">目前沒有符合的代課需求</div> : 
               activeClasses.map(cls => {
                 const requester = users.find(u => u.id === cls.requester_id);
                 return (
-                  <div 
-                    key={cls.id} 
-                    onClick={() => onViewDetail(cls.id)}
-                    className="bg-white rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] cursor-pointer hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow border border-pink-50/50 relative overflow-hidden"
-                  >
+                  <div key={cls.id} onClick={() => onViewDetail(cls.id)} className="bg-white rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] cursor-pointer hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow border border-pink-50/50 relative overflow-hidden">
                     <div className="absolute top-0 right-0 flex">
-                      {cls.requester_id === currentUser.id && (
-                        <div className="bg-pink-100 text-pink-700 text-xs px-3 py-1 rounded-bl-xl font-medium">我的發佈</div>
-                      )}
-                      {isUrgent(cls.class_date, cls.start_time) && (
-                        <div className="bg-red-500 text-white text-xs px-3 py-1 font-bold flex items-center gap-1 rounded-bl-xl ml-1 shadow-sm">
-                          <LucideIcon name="Flame" size={12}/> 急件
-                        </div>
-                      )}
+                      {cls.requester_id === currentUser.id && <div className="bg-pink-100 text-pink-700 text-xs px-3 py-1 rounded-bl-xl font-medium">我的發佈</div>}
+                      {isUrgent(cls.class_date, cls.start_time) && <div className="bg-red-500 text-white text-xs px-3 py-1 font-bold flex items-center gap-1 rounded-bl-xl ml-1 shadow-sm"><LucideIcon name="Flame" size={12}/> 急件</div>}
                     </div>
                     <div className="flex items-center gap-3 mb-4 mt-2">
                       <img src={requester?.avatar || 'https://via.placeholder.com/150'} alt="avatar" className="w-10 h-10 rounded-full border-2 border-pink-100 object-cover" />
-                      <div>
-                        <h3 className="font-bold text-gray-800">{cls.course_name}</h3>
-                        <p className="text-xs text-gray-500">{requester?.name || '未知教練'} 徵求代課</p>
-                      </div>
+                      <div><h3 className="font-bold text-gray-800">{cls.course_name}</h3><p className="text-xs text-gray-500">{requester?.name || '未知教練'} 徵求代課</p></div>
                     </div>
                     <div className="grid grid-cols-2 gap-y-2 text-sm text-gray-600 mb-4">
                       <div className="flex items-center gap-1.5"><LucideIcon name="Calendar" size={16} className="text-pink-400" /> {cls.class_date}</div>
@@ -481,51 +399,33 @@
                     </div>
                     <div className="flex justify-between items-center border-t border-gray-50 pt-3">
                       <span className="text-lg font-bold text-gray-800">NT$ {cls.fee}</span>
-                      <button className="bg-gradient-to-r from-pink-400 to-purple-400 text-white px-5 py-1.5 rounded-full text-sm font-medium shadow-md shadow-pink-200">
-                        查看詳情
-                      </button>
+                      <button className="bg-gradient-to-r from-pink-400 to-purple-400 text-white px-5 py-1.5 rounded-full text-sm font-medium shadow-md shadow-pink-200">查看詳情</button>
                     </div>
                   </div>
                 )
               })
-            )}
+            }
           </div>
         </div>
       );
     }
 
-    //    function CreateRequestView({ onPublish, currentUser }) {
-      const [formData, setFormData] = useState({
-        course_name: '', location: '', class_date: '',
-        start_time: '18:00', end_time: '19:00', fee: 800
-      });
+    function CreateRequestView({ onPublish, currentUser }) {
+      const [formData, setFormData] = useState({ course_name: '', location: '', class_date: '', start_time: '18:00', end_time: '19:00', fee: 800 });
       const [showSuccess, setShowSuccess] = useState(false);
 
       const handleSubmit = (e) => {
         e.preventDefault();
         setShowSuccess(true);
-        setTimeout(() => {
-          onPublish({
-            id: 'c' + Date.now(),
-            requester_id: currentUser.id,
-            ...formData,
-            status: 'OPEN',
-            payment_status: 'UNPAID'
-          });
-        }, 1200);
+        setTimeout(() => { onPublish({ id: 'c' + Date.now(), requester_id: currentUser.id, ...formData, status: 'OPEN', payment_status: 'UNPAID' }); }, 1200);
       };
 
-      if (showSuccess) {
-        return (
-          <div className="flex flex-col items-center justify-center h-[60vh] animate-in zoom-in">
-            <div className="w-24 h-24 bg-pink-100 rounded-full flex items-center justify-center mb-4">
-              <LucideIcon name="CheckCircle2" size={48} className="text-pink-500" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-800">發佈成功！</h2>
-            <p className="text-gray-500 mt-2">案件已同步至雲端公開大廳</p>
-          </div>
-        );
-      }
+      if (showSuccess) return (
+        <div className="flex flex-col items-center justify-center h-[60vh] animate-in zoom-in">
+          <div className="w-24 h-24 bg-pink-100 rounded-full flex items-center justify-center mb-4"><LucideIcon name="CheckCircle2" size={48} className="text-pink-500" /></div>
+          <h2 className="text-xl font-bold text-gray-800">發佈成功！</h2><p className="text-gray-500 mt-2">案件已同步至公開大廳</p>
+        </div>
+      );
 
       return (
         <div className="animate-in fade-in">
@@ -533,73 +433,38 @@
           <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-6 shadow-sm border border-pink-50 space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">課程名稱</label>
-              <input required type="text" list="courses" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" 
-                     value={formData.course_name} onChange={e => setFormData({...formData, course_name: e.target.value})} placeholder="例如: 空中環、皮拉提斯" />
-              <datalist id="courses">
-                <option value="空中瑜珈" />
-                <option value="空中環" />
-                <option value="皮拉提斯" />
-                <option value="流瑜珈" />
-                <option value="肌力訓練" />
-              </datalist>
+              <input required type="text" list="courses" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.course_name} onChange={e => setFormData({...formData, course_name: e.target.value})} placeholder="例如: 空中環、皮拉提斯" />
+              <datalist id="courses"><option value="空中瑜珈" /><option value="空中環" /><option value="皮拉提斯" /><option value="流瑜珈" /><option value="肌力訓練" /></datalist>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">上課地點</label>
-              <input required type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="場館名稱" />
+              <input required type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="場館名稱" />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">日期 (限今日起)</label>
-                <input required type="date" min={getTodayStr()} className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                       value={formData.class_date} onChange={e => setFormData({...formData, class_date: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">開始時間</label>
-                <input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                       value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">結束時間</label>
-                <input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                       value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} />
-              </div>
+              <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">日期 (限今日起)</label><input required type="date" min={getTodayStr()} className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.class_date} onChange={e => setFormData({...formData, class_date: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">開始時間</label><input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">結束時間</label><input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} /></div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">代課費用 (NT$)</label>
-              <input required type="number" min="0" step="100" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.fee} onChange={e => setFormData({...formData, fee: Number(e.target.value)})} />
-            </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-pink-400 to-purple-500 text-white font-bold text-lg py-3.5 rounded-xl mt-4 shadow-lg shadow-pink-200 active:scale-95 transition-transform">
-              確認發佈
-            </button>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">代課費用 (NT$)</label><input required type="number" min="0" step="100" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.fee} onChange={e => setFormData({...formData, fee: Number(e.target.value)})} /></div>
+            <button type="submit" className="w-full bg-gradient-to-r from-pink-400 to-purple-500 text-white font-bold text-lg py-3.5 rounded-xl mt-4 shadow-lg shadow-pink-200 active:scale-95 transition-transform">確認發佈</button>
           </form>
         </div>
       );
     }
 
-    //    function ProfileView({ currentUser, classes, applications, reviews, users, onViewDetail, onEditProfile }) {
+    function ProfileView({ currentUser, classes, applications, reviews, users, onViewDetail, onEditProfile }) {
       const myRequests = classes.filter(c => c.requester_id === currentUser.id);
-      const myApplications = applications.filter(a => a.applicant_id === currentUser.id).map(a => {
-        return { ...a, classInfo: classes.find(c => c.id === a.class_id) }
-      }).filter(a => a.classInfo); 
-
+      const myApplications = applications.filter(a => a.applicant_id === currentUser.id).map(a => ({ ...a, classInfo: classes.find(c => c.id === a.class_id) })).filter(a => a.classInfo); 
       const myReviews = reviews.filter(r => r.reviewee_id === currentUser.id);
       const completedApps = myApplications.filter(a => a.status === 'ACCEPTED' && a.classInfo.status === 'COMPLETED');
       const totalEarnings = completedApps.reduce((sum, a) => sum + a.classInfo.fee, 0);
-      const acceptanceRate = myApplications.length > 0 
-        ? Math.round((myApplications.filter(a => a.status === 'ACCEPTED' || a.classInfo.status === 'COMPLETED').length / myApplications.length) * 100) 
-        : 0;
-
+      const acceptanceRate = myApplications.length > 0 ? Math.round((myApplications.filter(a => a.status === 'ACCEPTED' || a.classInfo.status === 'COMPLETED').length / myApplications.length) * 100) : 0;
       const [activeTab, setActiveTab] = useState('INFO');
 
       return (
         <div className="animate-in fade-in">
-          
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-pink-50 mb-6 flex flex-col items-center text-center relative">
-            <button onClick={onEditProfile} className="absolute top-4 right-4 text-gray-400 hover:text-pink-500 hover:bg-pink-50 p-2 rounded-full transition-colors" title="編輯個人資料">
-              <LucideIcon name="Edit2" size={18} />
-            </button>
+            <button onClick={onEditProfile} className="absolute top-4 right-4 text-gray-400 hover:text-pink-500 hover:bg-pink-50 p-2 rounded-full transition-colors" title="編輯個人資料"><LucideIcon name="Edit2" size={18} /></button>
             <div className="relative mb-3">
               <img src={currentUser.avatar} alt="avatar" className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover" />
               <div className="absolute -bottom-2 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border-2 border-white shadow-sm">
@@ -608,31 +473,22 @@
             </div>
             <h2 className="text-xl font-bold text-gray-800">{currentUser.name}</h2>
             <div className="text-xs text-gray-400 mt-1">來自 {currentUser.review_count || 0} 則評價</div>
-            <div className="flex flex-wrap justify-center gap-2 mt-3">
-              {currentUser.skills.map(s => (
-                <span key={s} className="bg-pink-50 text-pink-600 text-xs px-2.5 py-1 rounded-full font-medium">#{s}</span>
-              ))}
-            </div>
+            <div className="flex flex-wrap justify-center gap-2 mt-3">{currentUser.skills.map(s => <span key={s} className="bg-pink-50 text-pink-600 text-xs px-2.5 py-1 rounded-full font-medium">#{s}</span>)}</div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-3xl p-4 text-white shadow-md shadow-indigo-200 flex flex-col items-center justify-center relative overflow-hidden hover:scale-105 transition-transform">
               <LucideIcon name="Wallet" size={40} className="absolute -right-2 -bottom-2 opacity-20" />
-              <div className="text-[10px] font-medium opacity-80 mb-1">累計收入</div>
-              <div className="text-xl font-bold">${totalEarnings.toLocaleString()}</div>
+              <div className="text-[10px] font-medium opacity-80 mb-1">累計收入</div><div className="text-xl font-bold">${totalEarnings.toLocaleString()}</div>
             </div>
             <div className="bg-gradient-to-br from-pink-400 to-rose-500 rounded-3xl p-4 text-white shadow-md shadow-pink-200 flex flex-col items-center justify-center relative overflow-hidden hover:scale-105 transition-transform">
               <LucideIcon name="Award" size={40} className="absolute -right-2 -bottom-2 opacity-20" />
-              <div className="text-[10px] font-medium opacity-80 mb-1">完成代課</div>
-              <div className="text-xl font-bold">{completedApps.length} <span className="text-xs font-normal">堂</span></div>
+              <div className="text-[10px] font-medium opacity-80 mb-1">完成代課</div><div className="text-xl font-bold">{completedApps.length} <span className="text-xs font-normal">堂</span></div>
             </div>
             <div className="bg-white rounded-3xl p-4 shadow-sm border border-pink-50 flex flex-col items-center justify-center hover:scale-105 transition-transform">
               <div className="text-[10px] font-medium text-gray-500 mb-1">應徵錄取率</div>
               <div className="relative w-12 h-12 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                  <path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                  <path className="text-pink-500 drop-shadow-sm transition-all duration-1000 ease-out" strokeWidth="4" strokeDasharray={`${acceptanceRate}, 100`} strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                </svg>
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36"><path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" /><path className="text-pink-500 drop-shadow-sm transition-all duration-1000 ease-out" strokeWidth="4" strokeDasharray={`${acceptanceRate}, 100`} strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" /></svg>
                 <div className="absolute text-[10px] font-bold text-gray-700">{acceptanceRate}%</div>
               </div>
             </div>
@@ -647,34 +503,24 @@
           {activeTab === 'INFO' && (
             <div className="space-y-4">
               <div className="bg-white rounded-3xl p-5 shadow-sm border border-pink-50">
-                <h3 className="font-bold text-gray-800 mb-2">教學經歷</h3>
-                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{currentUser.bio}</p>
+                <h3 className="font-bold text-gray-800 mb-2">教學經歷</h3><p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{currentUser.bio}</p>
               </div>
               <h3 className="font-bold text-gray-800 ml-2 mt-6">歷史評價 ({myReviews.length})</h3>
-              {myReviews.length === 0 ? (
-                <div className="text-center py-6 text-gray-400 text-sm bg-white rounded-3xl border border-dashed border-gray-200">尚未收到評價</div>
-              ) : (
+              {myReviews.length === 0 ? <div className="text-center py-6 text-gray-400 text-sm bg-white rounded-3xl border border-dashed border-gray-200">尚未收到評價</div> : 
                 <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 no-scrollbar">
                   {myReviews.map(r => {
                     const reviewer = users.find(u => u.id === r.reviewer_id);
                     return (
                       <div key={r.id} className="snap-center shrink-0 w-64 bg-white rounded-3xl p-5 shadow-sm border border-pink-50">
-                        <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                          <img src={reviewer?.avatar || 'https://via.placeholder.com/150'} alt="reviewer" className="w-6 h-6 rounded-full object-cover" />
-                          <span className="text-xs font-bold text-gray-700">{reviewer?.name || '教練'}</span>
-                        </div>
-                        <div className="flex text-yellow-400 mb-2">
-                          {[...Array(5)].map((_, i) => <LucideIcon name="Star" key={i} size={14} fill={i < r.rating ? 'currentColor' : 'none'} className={i >= r.rating ? 'text-gray-200' : ''}/>)}
-                        </div>
+                        <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2"><img src={reviewer?.avatar || 'https://via.placeholder.com/150'} alt="reviewer" className="w-6 h-6 rounded-full object-cover" /><span className="text-xs font-bold text-gray-700">{reviewer?.name || '教練'}</span></div>
+                        <div className="flex text-yellow-400 mb-2">{[...Array(5)].map((_, i) => <LucideIcon name="Star" key={i} size={14} fill={i < r.rating ? 'currentColor' : 'none'} className={i >= r.rating ? 'text-gray-200' : ''}/>)}</div>
                         <p className="text-sm text-gray-600 mb-3">"{r.comment}"</p>
-                        <div className="flex gap-1 flex-wrap">
-                          {r.tags?.map(t => <span key={t} className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">{t}</span>)}
-                        </div>
+                        <div className="flex gap-1 flex-wrap">{r.tags?.map(t => <span key={t} className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">{t}</span>)}</div>
                       </div>
                     )
                   })}
                 </div>
-              )}
+              }
             </div>
           )}
 
@@ -686,13 +532,7 @@
                   return (
                     <div key={c.id} className="bg-white rounded-2xl p-4 shadow-sm border border-pink-50 flex justify-between items-center cursor-pointer relative overflow-hidden" onClick={() => onViewDetail(c.id)}>
                       {isUrgent(c.class_date, c.start_time) && c.status === 'OPEN' && <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-400"></div>}
-                      <div>
-                        <div className="font-bold text-gray-800 flex items-center gap-2">
-                          {c.course_name}
-                          {isUrgent(c.class_date, c.start_time) && c.status === 'OPEN' && <LucideIcon name="Flame" size={14} className="text-red-500"/>}
-                        </div>
-                        <div className="text-xs text-gray-500">{c.class_date} {c.start_time}</div>
-                      </div>
+                      <div><div className="font-bold text-gray-800 flex items-center gap-2">{c.course_name}{isUrgent(c.class_date, c.start_time) && c.status === 'OPEN' && <LucideIcon name="Flame" size={14} className="text-red-500"/>}</div><div className="text-xs text-gray-500">{c.class_date} {c.start_time}</div></div>
                       <div className={`text-xs font-bold px-3 py-1 rounded-full ${status.style}`}>{status.text}</div>
                     </div>
                   )
@@ -706,20 +546,8 @@
               {myApplications.length === 0 ? <div className="text-center py-10 text-gray-400 bg-white rounded-3xl border border-dashed border-gray-200">無應徵紀錄</div> : 
                 myApplications.map(a => (
                   <div key={a.id} className="bg-white rounded-2xl p-4 shadow-sm border border-pink-50 flex justify-between items-center cursor-pointer" onClick={() => onViewDetail(a.class_id)}>
-                    <div>
-                      <div className="font-bold text-gray-800">{a.classInfo.course_name}</div>
-                      <div className="text-xs text-gray-500">{a.classInfo.class_date}</div>
-                    </div>
-                    <div className={`text-xs font-bold px-3 py-1 rounded-full ${
-                      a.status === 'ACCEPTED' ? 'bg-green-100 text-green-700' : 
-                      a.status === 'WAITLISTED' ? 'bg-yellow-100 text-yellow-700' : 
-                      a.status === 'REJECTED' || a.status === 'CANCELLED' ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {a.status === 'ACCEPTED' ? '正取' : 
-                       a.status === 'WAITLISTED' ? `候補 ${a.waitlist_order || ''}` : 
-                       a.status === 'REJECTED' ? '未錄取' : 
-                       a.status === 'CANCELLED' ? '已取消' : '審核中'}
-                    </div>
+                    <div><div className="font-bold text-gray-800">{a.classInfo.course_name}</div><div className="text-xs text-gray-500">{a.classInfo.class_date}</div></div>
+                    <div className={`text-xs font-bold px-3 py-1 rounded-full ${a.status === 'ACCEPTED' ? 'bg-green-100 text-green-700' : a.status === 'WAITLISTED' ? 'bg-yellow-100 text-yellow-700' : a.status === 'REJECTED' || a.status === 'CANCELLED' ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>{a.status === 'ACCEPTED' ? '正取' : a.status === 'WAITLISTED' ? `候補 ${a.waitlist_order || ''}` : a.status === 'REJECTED' ? '未錄取' : a.status === 'CANCELLED' ? '已取消' : '審核中'}</div>
                   </div>
                 ))
               }
@@ -729,7 +557,7 @@
       );
     }
 
-    //    function ClassDetailView({ classId, classes, applications, messages, reviews, users, currentUser, onBack, showToast, showConfirm, dbActions }) {
+    function ClassDetailView({ classId, classes, applications, messages, reviews, users, currentUser, onBack, showToast, showConfirm, dbActions }) {
       const cls = classes.find(c => c.id === classId);
       const requester = users.find(u => u.id === cls?.requester_id);
       const isRequester = currentUser.id === cls?.requester_id;
@@ -744,18 +572,13 @@
       const [isEditingClass, setIsEditingClass] = useState(false);
       const [editFormData, setEditFormData] = useState({ ...cls });
 
-      const AVAILABLE_TAGS = ['準時到達', '學生反應極佳', '服裝專業', '熱心負責', '教學清晰'];
-
       if (!cls) return <div>找不到課程</div>;
-
       const isClassPast = new Date(cls.class_date) < new Date(getTodayStr());
       
       const handleApply = () => {
         showConfirm("確定要應徵這堂代課嗎？", async () => {
-          await dbActions.addApp({
-            id: 'a' + Date.now(), class_id: classId, applicant_id: currentUser.id, status: 'PENDING', waitlist_order: null
-          });
-          showToast("應徵成功！已同步至雲端。");
+          await dbActions.addApp({ id: 'a' + Date.now(), class_id: classId, applicant_id: currentUser.id, status: 'PENDING', waitlist_order: null });
+          showToast("應徵成功！");
         });
       };
 
@@ -765,9 +588,7 @@
           if (myApp.status === 'ACCEPTED') {
             await dbActions.updateClass(classId, { status: 'OPEN' });
             showToast("已取消。系統將自動遞補候補！", "error");
-          } else {
-            showToast("已取消您的應徵申請。");
-          }
+          } else showToast("已取消您的應徵申請。");
         });
       };
 
@@ -789,7 +610,6 @@
         const wlApps = [...applications].filter(a => a.class_id === classId && a.status === 'WAITLISTED').sort((a,b) => a.waitlist_order - b.waitlist_order);
         const idx = wlApps.findIndex(a => a.id === appId);
         if (idx < 0) return;
-        
         let swapIdx = direction === 'UP' ? idx - 1 : idx + 1;
         if (swapIdx >= 0 && swapIdx < wlApps.length) {
           await dbActions.updateApp(wlApps[idx].id, { waitlist_order: wlApps[swapIdx].waitlist_order });
@@ -800,74 +620,51 @@
       const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!chatInput.trim()) return;
-        await dbActions.addMsg({
-          id: 'm' + Date.now(), class_id: classId, sender_id: currentUser.id, content: chatInput.trim(), is_deleted: false, timestamp: Date.now()
-        });
+        await dbActions.addMsg({ id: 'm' + Date.now(), class_id: classId, sender_id: currentUser.id, content: chatInput.trim(), is_deleted: false, timestamp: Date.now() });
         setChatInput('');
       };
 
       const togglePayment = async (type) => {
-        if (type === 'PAID_BY_A' && isRequester) {
-          await dbActions.updateClass(classId, { payment_status: cls.payment_status === 'UNPAID' ? 'PAID_BY_A' : 'UNPAID' });
-        } else if (type === 'RECEIVED_BY_B' && !isRequester) {
-          await dbActions.updateClass(classId, { payment_status: cls.payment_status === 'PAID_BY_A' ? 'RECEIVED_BY_B' : 'PAID_BY_A' });
-        }
+        if (type === 'PAID_BY_A' && isRequester) await dbActions.updateClass(classId, { payment_status: cls.payment_status === 'UNPAID' ? 'PAID_BY_A' : 'UNPAID' });
+        else if (type === 'RECEIVED_BY_B' && !isRequester) await dbActions.updateClass(classId, { payment_status: cls.payment_status === 'PAID_BY_A' ? 'RECEIVED_BY_B' : 'PAID_BY_A' });
       };
 
       const submitReview = async () => {
         const acceptedApp = classApps.find(a => a.status === 'ACCEPTED');
         if (!acceptedApp) return;
-        
-        await dbActions.addReview({
-          id: 'r' + Date.now(), class_id: classId, reviewer_id: currentUser.id, reviewee_id: acceptedApp.applicant_id,
-          rating: reviewData.rating, tags: reviewData.tags, comment: reviewData.comment
-        });
+        await dbActions.addReview({ id: 'r' + Date.now(), class_id: classId, reviewer_id: currentUser.id, reviewee_id: acceptedApp.applicant_id, rating: reviewData.rating, tags: reviewData.tags, comment: reviewData.comment });
         setShowReviewForm(false);
-        showToast("評價送出成功！已同步至對方的公開履歷中。");
+        showToast("評價送出成功！");
       };
 
       const handleDeleteClass = () => {
-        showConfirm('確定要刪除這筆代課需求嗎？若已有應徵者將一併取消他們的應徵紀錄，此操作無法還原。', async () => {
+        showConfirm('確定要刪除這筆代課需求嗎？', async () => {
           await dbActions.deleteClass(classId);
-          // Update related apps
-          applications.filter(a => a.class_id === classId).forEach(async a => {
-            await dbActions.updateApp(a.id, { status: 'CANCELLED' });
-          });
-          showToast('案件已從雲端刪除', 'error');
+          applications.filter(a => a.class_id === classId).forEach(async a => await dbActions.updateApp(a.id, { status: 'CANCELLED' }));
+          showToast('案件已刪除', 'error');
           onBack();
         });
       };
 
-      const toggleTag = (tag) => {
-        setReviewData(prev => ({
-          ...prev, 
-          tags: prev.tags.includes(tag) ? prev.tags.filter(t => t !== tag) : [...prev.tags, tag]
-        }));
-      };
-
+      const toggleTag = (tag) => setReviewData(prev => ({ ...prev, tags: prev.tags.includes(tag) ? prev.tags.filter(t => t !== tag) : [...prev.tags, tag] }));
       const bottomSheetUser = selectedApp ? users.find(u => u.id === selectedApp.applicant_id) : null;
       const acceptedApp = classApps.find(a => a.status === 'ACCEPTED');
 
       return (
         <div className="animate-in slide-in-from-right-8 relative pb-10">
-          <button onClick={onBack} className="flex items-center gap-1 text-gray-500 mb-4 hover:text-pink-600 transition-colors">
-            <LucideIcon name="ChevronLeft" size={20} /> 返回
-          </button>
+          <button onClick={onBack} className="flex items-center gap-1 text-gray-500 mb-4 hover:text-pink-600 transition-colors"><LucideIcon name="ChevronLeft" size={20} /> 返回</button>
 
           {isEditingClass ? (
-            <form onSubmit={async (e) => { e.preventDefault(); await dbActions.updateClass(classId, editFormData); setIsEditingClass(false); showToast('案件資料已更新！'); }} className="bg-white rounded-3xl p-6 shadow-sm border border-pink-100 mb-6 space-y-4 animate-in fade-in">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-gray-800 text-lg">編輯案件資訊</h3>
-                <button type="button" onClick={() => setIsEditingClass(false)} className="text-gray-400 p-1"><LucideIcon name="XCircle" size={20}/></button>
-              </div>
+            <form onSubmit={async (e) => { e.preventDefault(); await dbActions.updateClass(classId, editFormData); setIsEditingClass(false); showToast('案件已更新！'); }} className="bg-white rounded-3xl p-6 shadow-sm border border-pink-100 mb-6 space-y-4 animate-in fade-in">
+              <div className="flex justify-between items-center mb-2"><h3 className="font-bold text-gray-800 text-lg">編輯案件資訊</h3><button type="button" onClick={() => setIsEditingClass(false)} className="text-gray-400 p-1"><LucideIcon name="XCircle" size={20}/></button></div>
               <div><label className="block text-xs font-medium text-gray-500 mb-1">課程名稱</label><input required type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.course_name} onChange={e => setEditFormData({...editFormData, course_name: e.target.value})} /></div>
               <div><label className="block text-xs font-medium text-gray-500 mb-1">上課地點</label><input required type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">日期</label><input required type="date" min={getTodayStr()} className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.class_date} onChange={e => setEditFormData({...editFormData, class_date: e.target.value})} /></div>
-                <div><label className="block text-xs font-medium text-gray-500 mb-1">開始時間</label><input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.start_time} onChange={e => setEditFormData({...editFormData, start_time: e.target.value})} /></div>
-                <div><label className="block text-xs font-medium text-gray-500 mb-1">結束時間</label><input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.end_time} onChange={e => setEditFormData({...editFormData, end_time: e.target.value})} /></div>
+                <div><label className="block text-xs font-medium text-gray-500 mb-1">開始</label><input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.start_time} onChange={e => setEditFormData({...editFormData, start_time: e.target.value})} /></div>
+                <div><label className="block text-xs font-medium text-gray-500 mb-1">結束</label><input required type="time" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.end_time} onChange={e => setEditFormData({...editFormData, end_time: e.target.value})} /></div>
               </div>
-              <div><label className="block text-xs font-medium text-gray-500 mb-1">代課費用 (NT$)</label><input required type="number" step="100" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.fee} onChange={e => setEditFormData({...editFormData, fee: Number(e.target.value)})} /></div>
+              <div><label className="block text-xs font-medium text-gray-500 mb-1">費用 (NT$)</label><input required type="number" step="100" className="w-full bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl text-sm" value={editFormData.fee} onChange={e => setEditFormData({...editFormData, fee: Number(e.target.value)})} /></div>
               <button type="submit" className="w-full bg-pink-500 text-white font-bold py-3 rounded-xl mt-2 flex items-center justify-center gap-2"><LucideIcon name="Save" size={18}/> 儲存修改</button>
             </form>
           ) : (
@@ -885,45 +682,22 @@
                   </div>
                 )}
               </div>
-
-              <div className="flex items-center gap-2 mb-4 text-sm text-gray-500">
-                <img src={requester?.avatar || 'https://via.placeholder.com/150'} alt="req" className="w-5 h-5 rounded-full object-cover" />
-                <span>{requester?.name || '未知教練'} 徵求代課</span>
-              </div>
-
+              <div className="flex items-center gap-2 mb-4 text-sm text-gray-500"><img src={requester?.avatar || 'https://via.placeholder.com/150'} alt="req" className="w-5 h-5 rounded-full object-cover" /><span>{requester?.name || '教練'} 徵求代課</span></div>
               <div className="bg-pink-50/50 rounded-2xl p-4 space-y-2 mb-4">
                 <div className="flex items-center gap-2 text-sm text-gray-700"><LucideIcon name="Calendar" size={16} className="text-pink-400" /> {cls.class_date}</div>
                 <div className="flex items-center gap-2 text-sm text-gray-700"><LucideIcon name="Clock" size={16} className="text-purple-400" /> {cls.start_time} - {cls.end_time}</div>
                 <div className="flex items-center gap-2 text-sm text-gray-700"><LucideIcon name="MapPin" size={16} className="text-rose-400" /> {cls.location}</div>
                 <div className="font-bold text-pink-600 text-lg mt-2">NT$ {cls.fee}</div>
               </div>
-
-              {!isRequester && cls.status === 'OPEN' && !myApp && (
-                <button onClick={handleApply} className="w-full bg-gradient-to-r from-pink-400 to-purple-500 text-white font-bold py-3 rounded-xl shadow-md active:scale-95 transition-transform">
-                  應徵代課
-                </button>
-              )}
-              
+              {!isRequester && cls.status === 'OPEN' && !myApp && <button onClick={handleApply} className="w-full bg-gradient-to-r from-pink-400 to-purple-500 text-white font-bold py-3 rounded-xl shadow-md active:scale-95 transition-transform">應徵代課</button>}
               {!isRequester && myApp && myApp.status !== 'CANCELLED' && myApp.status !== 'REJECTED' && (
                 <div className="flex gap-2">
-                  <div className={`flex-1 text-center py-3 rounded-xl font-bold text-sm ${myApp.status === 'ACCEPTED' ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>
-                    狀態: {myApp.status === 'ACCEPTED' ? '錄取正取' : myApp.status === 'WAITLISTED' ? `候補 ${myApp.waitlist_order}` : '審核中'}
-                  </div>
-                  {cls.status !== 'COMPLETED' && (
-                    <button onClick={handleCancelApp} className="px-4 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-red-50 hover:text-red-600 transition-colors">取消</button>
-                  )}
+                  <div className={`flex-1 text-center py-3 rounded-xl font-bold text-sm ${myApp.status === 'ACCEPTED' ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>狀態: {myApp.status === 'ACCEPTED' ? '錄取正取' : myApp.status === 'WAITLISTED' ? `候補 ${myApp.waitlist_order}` : '審核中'}</div>
+                  {cls.status !== 'COMPLETED' && <button onClick={handleCancelApp} className="px-4 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-red-50 hover:text-red-600 transition-colors">取消</button>}
                 </div>
               )}
-
               {isRequester && cls.status === 'MATCHED' && (
-                <button onClick={() => {
-                  showConfirm("確定課程已結束並要結案嗎？結案後將解鎖對帳與評價功能。", async () => {
-                    await dbActions.updateClass(classId, { status: 'COMPLETED' });
-                    showToast("已成功結案！");
-                  });
-                }} className="w-full mt-4 bg-gray-800 text-white font-bold py-3 rounded-xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2">
-                  <LucideIcon name="CheckCircle2" size={18} /> 完成課程並手動結案
-                </button>
+                <button onClick={() => showConfirm("確定已結束並結案嗎？", async () => { await dbActions.updateClass(classId, { status: 'COMPLETED' }); showToast("已結案！"); })} className="w-full mt-4 bg-gray-800 text-white font-bold py-3 rounded-xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2"><LucideIcon name="CheckCircle2" size={18} /> 完成課程並手動結案</button>
               )}
             </div>
           )}
@@ -932,34 +706,22 @@
             <div className="mb-6">
               <div className="flex justify-between items-end mb-3">
                 <h3 className="text-lg font-bold text-gray-800 ml-1">應徵者名單</h3>
-                {classApps.some(a => a.status === 'WAITLISTED') && (
-                  <button onClick={() => setSortMode(!sortMode)} className="text-sm text-pink-600 font-medium flex items-center gap-1">
-                    <LucideIcon name="GripVertical" size={14}/> {sortMode ? '完成排序' : '候補排序'}
-                  </button>
-                )}
+                {classApps.some(a => a.status === 'WAITLISTED') && <button onClick={() => setSortMode(!sortMode)} className="text-sm text-pink-600 font-medium flex items-center gap-1"><LucideIcon name="GripVertical" size={14}/> {sortMode ? '完成排序' : '候補排序'}</button>}
               </div>
-              
               <div className="space-y-3">
                 {classApps.length === 0 ? <div className="text-gray-400 text-sm p-4 bg-white rounded-2xl text-center border border-dashed border-gray-200">尚無人應徵</div> : null}
-                
                 {classApps.filter(a => a.status === 'ACCEPTED').map(app => {
                   const user = users.find(u => u.id === app.applicant_id);
                   return (
                     <div key={app.id} className="bg-green-50 border border-green-200 rounded-2xl p-3 flex items-center justify-between cursor-pointer" onClick={() => setSelectedApp(app)}>
                       <div className="flex items-center gap-3">
                         <img src={user?.avatar} alt="u" className="w-10 h-10 rounded-full border border-green-200 object-cover" />
-                        <div>
-                          <div className="font-bold text-green-900 text-sm flex items-center gap-1">
-                            {user?.name} <LucideIcon name="CheckCircle2" size={14} className="text-green-600"/>
-                          </div>
-                          <div className="text-xs text-green-700">正取代課者</div>
-                        </div>
+                        <div><div className="font-bold text-green-900 text-sm flex items-center gap-1">{user?.name} <LucideIcon name="CheckCircle2" size={14} className="text-green-600"/></div><div className="text-xs text-green-700">正取代課者</div></div>
                       </div>
                       <button className="bg-white text-green-700 text-xs px-3 py-1 rounded-full shadow-sm font-medium">查看履歷</button>
                     </div>
                   )
                 })}
-
                 {classApps.filter(a => a.status === 'PENDING' || a.status === 'WAITLISTED').sort((a,b) => (a.waitlist_order || 99) - (b.waitlist_order || 99)).map(app => {
                   const user = users.find(u => u.id === app.applicant_id);
                   return (
@@ -972,31 +734,17 @@
                           </div>
                         )}
                         <img src={user?.avatar} alt="u" className="w-10 h-10 rounded-full object-cover" />
-                        <div>
-                          <div className="font-bold text-gray-800 text-sm flex items-center gap-1">
-                            {user?.name} <LucideIcon name="Star" size={12} className="text-yellow-400 fill-current"/>{user?.avg_rating}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {app.status === 'WAITLISTED' ? <span className="text-yellow-600 font-medium">候補 {app.waitlist_order}</span> : '新應徵'}
-                          </div>
-                        </div>
+                        <div><div className="font-bold text-gray-800 text-sm flex items-center gap-1">{user?.name} <LucideIcon name="Star" size={12} className="text-yellow-400 fill-current"/>{user?.avg_rating}</div><div className="text-xs text-gray-500">{app.status === 'WAITLISTED' ? <span className="text-yellow-600 font-medium">候補 {app.waitlist_order}</span> : '新應徵'}</div></div>
                       </div>
                       {!sortMode && <button className="bg-pink-50 text-pink-600 text-xs px-3 py-1 rounded-full font-medium">審核</button>}
                     </div>
                   )
                 })}
-
                 {classApps.filter(a => a.status === 'REJECTED' || a.status === 'CANCELLED').map(app => {
                   const user = users.find(u => u.id === app.applicant_id);
                   return (
                     <div key={app.id} className="bg-gray-50 rounded-2xl p-3 flex items-center justify-between border border-gray-100 opacity-60">
-                       <div className="flex items-center gap-3">
-                        <img src={user?.avatar} alt="u" className="w-10 h-10 rounded-full grayscale object-cover" />
-                        <div>
-                          <div className="font-bold text-gray-600 text-sm">{user?.name}</div>
-                          <div className="text-xs text-gray-400">{app.status === 'CANCELLED' ? '已取消' : '婉拒'}</div>
-                        </div>
-                      </div>
+                       <div className="flex items-center gap-3"><img src={user?.avatar} alt="u" className="w-10 h-10 rounded-full grayscale object-cover" /><div><div className="font-bold text-gray-600 text-sm">{user?.name}</div><div className="text-xs text-gray-400">{app.status === 'CANCELLED' ? '已取消' : '婉拒'}</div></div></div>
                     </div>
                   )
                 })}
@@ -1008,42 +756,26 @@
             <div className="mb-6 animate-in fade-in zoom-in">
               <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-3xl p-5 border border-blue-100 shadow-sm">
                 <h3 className="text-lg font-bold text-indigo-900 mb-3 flex items-center gap-2"><LucideIcon name="CheckCircle2" size={18}/> 結案與對帳面板</h3>
-                
                 <div className="bg-white rounded-xl p-4 mb-4 text-sm">
                   <div className="font-bold text-gray-700 mb-1">隱私資訊解鎖</div>
-                  {isRequester ? (
-                    <p className="text-gray-600">代課者收款帳號: <br/><span className="font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mt-1 inline-block">{users.find(u=>u.id===acceptedApp?.applicant_id)?.bank_account}</span></p>
-                  ) : (
-                    <p className="text-gray-600">您的收款帳號已提供給發案者核對。</p>
-                  )}
+                  {isRequester ? <p className="text-gray-600">代課者收款帳號: <br/><span className="font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mt-1 inline-block">{users.find(u=>u.id===acceptedApp?.applicant_id)?.bank_account}</span></p> : <p className="text-gray-600">您的收款帳號已提供給發案者核對。</p>}
                 </div>
-
                 <div className="space-y-3">
                   <label className={`flex items-center gap-3 p-3 rounded-xl border ${cls.payment_status !== 'UNPAID' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-gray-200'} ${!isRequester && 'opacity-60 cursor-not-allowed'}`}>
-                    <input type="checkbox" className="w-5 h-5 accent-green-600" 
-                      checked={cls.payment_status !== 'UNPAID'} 
-                      onChange={() => togglePayment('PAID_BY_A')}
-                      disabled={!isRequester}
-                    />
+                    <input type="checkbox" className="w-5 h-5 accent-green-600" checked={cls.payment_status !== 'UNPAID'} onChange={() => togglePayment('PAID_BY_A')} disabled={!isRequester} />
                     <span className="font-medium text-sm">發案者已匯款 (A視角) {cls.payment_status !== 'UNPAID' && <LucideIcon name="CheckCircle2" size={16} className="inline ml-1 text-green-600"/>}</span>
                   </label>
-                  
                   <label className={`flex items-center gap-3 p-3 rounded-xl border ${cls.payment_status === 'RECEIVED_BY_B' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-gray-200'} ${isRequester && 'opacity-60 cursor-not-allowed'}`}>
-                    <input type="checkbox" className="w-5 h-5 accent-green-600" 
-                      checked={cls.payment_status === 'RECEIVED_BY_B'} 
-                      onChange={() => togglePayment('RECEIVED_BY_B')}
-                      disabled={isRequester}
-                    />
+                    <input type="checkbox" className="w-5 h-5 accent-green-600" checked={cls.payment_status === 'RECEIVED_BY_B'} onChange={() => togglePayment('RECEIVED_BY_B')} disabled={isRequester} />
                     <span className="font-medium text-sm">代課者已收款 (B視角) {cls.payment_status === 'RECEIVED_BY_B' && <LucideIcon name="CheckCircle2" size={16} className="inline ml-1 text-green-600"/>}</span>
                   </label>
                 </div>
-
                 {isRequester && cls.status === 'COMPLETED' && !reviews.find(r => r.class_id === classId) && (
                   <div className="mt-5 p-5 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl border border-yellow-200 text-center animate-in zoom-in">
                     <h4 className="font-bold text-yellow-800 mb-2">代課已完成！</h4>
                     <p className="text-xs text-yellow-700 mb-4">請為這次的代課老師留下評價，您的反饋將會動態更新至他的公開個人履歷中。</p>
                     <button onClick={() => setShowReviewForm(true)} className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
-                      <LucideIcon name="Star" size={18} /> 給予代課老師反饋
+                      <LucideIcon name="Star" size={18} fill="currentColor"/> 給予代課老師反饋
                     </button>
                   </div>
                 )}
@@ -1066,12 +798,7 @@
                       <div className={`group relative max-w-[75%] rounded-2xl px-4 py-2 ${isMe ? 'bg-pink-100 text-pink-900 rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
                         <div className="text-xs font-bold mb-0.5 opacity-50">{sender?.name}</div>
                         <div className="text-sm break-words">{msg.content}</div>
-                        {isMe && (
-                          <button onClick={() => dbActions.updateMessage(msg.id, { is_deleted: true })}
-                            className="absolute top-1/2 -translate-y-1/2 -left-8 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <LucideIcon name="Trash2" size={16} />
-                          </button>
-                        )}
+                        {isMe && <button onClick={() => dbActions.updateMessage(msg.id, { is_deleted: true })} className="absolute top-1/2 -translate-y-1/2 -left-8 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><LucideIcon name="Trash2" size={16} /></button>}
                       </div>
                     </div>
                   )
@@ -1079,9 +806,7 @@
               </div>
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="留言溝通確認..." className="flex-1 bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"/>
-                <button type="submit" className="bg-pink-500 text-white p-2 rounded-full hover:bg-pink-600 transition-colors shrink-0">
-                  <LucideIcon name="Send" size={18} className="ml-0.5" />
-                </button>
+                <button type="submit" className="bg-pink-500 text-white p-2 rounded-full hover:bg-pink-600 transition-colors shrink-0"><LucideIcon name="Send" size={18} className="ml-0.5" /></button>
               </form>
             </div>
           )}
@@ -1090,30 +815,15 @@
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl animate-in zoom-in-95 text-center">
                 <h3 className="text-xl font-bold mb-4">評價代課老師</h3>
-                
                 <div className="flex justify-center gap-2 mb-4">
-                  {[1,2,3,4,5].map(star => (
-                    <button key={star} onClick={() => setReviewData({...reviewData, rating: star})}>
-                      <LucideIcon name="Star" size={36} fill={star <= reviewData.rating ? '#FBBF24' : 'none'} className={star <= reviewData.rating ? 'text-yellow-400 transform scale-110 transition-transform' : 'text-gray-300 transition-transform'} />
-                    </button>
-                  ))}
+                  {[1,2,3,4,5].map(star => <button key={star} onClick={() => setReviewData({...reviewData, rating: star})}><LucideIcon name="Star" size={36} fill={star <= reviewData.rating ? '#FBBF24' : 'none'} className={star <= reviewData.rating ? 'text-yellow-400 transform scale-110 transition-transform' : 'text-gray-300 transition-transform'} /></button>)}
                 </div>
-
                 <div className="flex flex-wrap justify-center gap-2 mb-4">
                   {['準時到達', '學生反應極佳', '服裝專業', '熱心負責', '教學清晰'].map(tag => (
-                    <button 
-                      key={tag} 
-                      onClick={() => toggleTag(tag)}
-                      className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors border ${reviewData.tags.includes(tag) ? 'bg-pink-100 border-pink-200 text-pink-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}
-                    >
-                      #{tag}
-                    </button>
+                    <button key={tag} onClick={() => toggleTag(tag)} className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors border ${reviewData.tags.includes(tag) ? 'bg-pink-100 border-pink-200 text-pink-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>#{tag}</button>
                   ))}
                 </div>
-
-                <textarea className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm mb-5 h-24 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  placeholder="寫下具體感謝或建議 (例如：老師很會帶氣氛！)" value={reviewData.comment} onChange={e => setReviewData({...reviewData, comment: e.target.value})} />
-                
+                <textarea className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm mb-5 h-24 focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="寫下具體感謝或建議 (例如：老師很會帶氣氛！)" value={reviewData.comment} onChange={e => setReviewData({...reviewData, comment: e.target.value})} />
                 <div className="flex gap-2">
                   <button onClick={() => setShowReviewForm(false)} className="flex-1 py-3 text-gray-500 font-bold rounded-xl bg-gray-100">稍後再評</button>
                   <button onClick={submitReview} className="flex-1 py-3 text-white font-bold rounded-xl bg-gradient-to-r from-pink-500 to-purple-500">送出評價</button>
@@ -1131,42 +841,22 @@
                   <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center gap-4">
                       <img src={bottomSheetUser.avatar} alt="av" className="w-16 h-16 rounded-full border-2 border-pink-100 object-cover" />
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800">{bottomSheetUser.name}</h3>
-                        <div className="flex items-center gap-1 text-yellow-500 text-sm font-bold mt-1">
-                          <LucideIcon name="Star" size={14} fill="currentColor"/> {bottomSheetUser.avg_rating}
-                          <span className="text-xs text-gray-400 font-normal">({bottomSheetUser.review_count}則評價)</span>
-                        </div>
-                      </div>
+                      <div><h3 className="text-xl font-bold text-gray-800">{bottomSheetUser.name}</h3><div className="flex items-center gap-1 text-yellow-500 text-sm font-bold mt-1"><LucideIcon name="Star" size={14} fill="currentColor"/> {bottomSheetUser.avg_rating} <span className="text-xs text-gray-400 font-normal">({bottomSheetUser.review_count}則評價)</span></div></div>
                     </div>
                     <button onClick={() => setSelectedApp(null)} className="p-2 text-gray-400 bg-gray-100 rounded-full"><LucideIcon name="XCircle" size={20}/></button>
                   </div>
                   <div className="space-y-4 mb-8">
-                    <div>
-                      <h4 className="text-sm font-bold text-gray-500 mb-2">專長</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {bottomSheetUser.skills.map(s => <span key={s} className="bg-pink-50 text-pink-600 text-xs px-2.5 py-1 rounded-full">#{s}</span>)}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-gray-500 mb-2">教學經歷</h4>
-                      <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl leading-relaxed">{bottomSheetUser.bio}</p>
-                    </div>
+                    <div><h4 className="text-sm font-bold text-gray-500 mb-2">專長</h4><div className="flex flex-wrap gap-2">{bottomSheetUser.skills.map(s => <span key={s} className="bg-pink-50 text-pink-600 text-xs px-2.5 py-1 rounded-full">#{s}</span>)}</div></div>
+                    <div><h4 className="text-sm font-bold text-gray-500 mb-2">教學經歷</h4><p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl leading-relaxed">{bottomSheetUser.bio}</p></div>
                   </div>
                   {isRequester && selectedApp.status === 'PENDING' && (
                     <div className="grid grid-cols-3 gap-2">
-                      <button onClick={() => handleAppStatusChange(selectedApp.id, 'ACCEPTED')} className="col-span-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white font-bold py-3.5 rounded-xl mb-2 shadow-lg shadow-green-200">
-                        確認代課 (正取)
-                      </button>
+                      <button onClick={() => handleAppStatusChange(selectedApp.id, 'ACCEPTED')} className="col-span-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white font-bold py-3.5 rounded-xl mb-2 shadow-lg shadow-green-200">確認代課 (正取)</button>
                       <button onClick={() => handleAppStatusChange(selectedApp.id, 'WAITLISTED')} className="col-span-2 bg-yellow-100 text-yellow-700 font-bold py-3 rounded-xl">設為候補</button>
                       <button onClick={() => handleAppStatusChange(selectedApp.id, 'REJECTED')} className="col-span-1 bg-gray-100 text-gray-500 font-bold py-3 rounded-xl">婉拒</button>
                     </div>
                   )}
-                  {isRequester && selectedApp.status !== 'PENDING' && (
-                    <div className="text-center font-bold text-gray-500 bg-gray-50 py-3 rounded-xl">
-                      當前狀態: {selectedApp.status === 'ACCEPTED' ? '正取' : selectedApp.status === 'WAITLISTED' ? '候補' : '已結案/婉拒'}
-                    </div>
-                  )}
+                  {isRequester && selectedApp.status !== 'PENDING' && <div className="text-center font-bold text-gray-500 bg-gray-50 py-3 rounded-xl">當前狀態: {selectedApp.status === 'ACCEPTED' ? '正取' : selectedApp.status === 'WAITLISTED' ? '候補' : '已結案/婉拒'}</div>}
                 </>
               )}
             </div>
@@ -1175,67 +865,28 @@
       );
     }
 
-    //    function EditProfileView({ currentUser, onSave, onCancel }) {
-      const [formData, setFormData] = useState({
-        name: currentUser.name, avatar: currentUser.avatar, bio: currentUser.bio,
-        skills: currentUser.skills.join(', '), bank_account: currentUser.bank_account || ''
-      });
-
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        onSave({
-          ...currentUser,
-          name: formData.name, avatar: formData.avatar, bio: formData.bio,
-          skills: formData.skills.split(',').map(s => s.trim()).filter(s => s),
-          bank_account: formData.bank_account
-        });
-      };
+    function EditProfileView({ currentUser, onSave, onCancel }) {
+      const [formData, setFormData] = useState({ name: currentUser.name, avatar: currentUser.avatar, bio: currentUser.bio, skills: currentUser.skills.join(', '), bank_account: currentUser.bank_account || '' });
+      const handleSubmit = (e) => { e.preventDefault(); onSave({ ...currentUser, name: formData.name, avatar: formData.avatar, bio: formData.bio, skills: formData.skills.split(',').map(s => s.trim()).filter(s => s), bank_account: formData.bank_account }); };
 
       return (
         <div className="animate-in slide-in-from-right-8 pb-10">
-          <button onClick={onCancel} className="flex items-center gap-1 text-gray-500 mb-4 hover:text-pink-600 transition-colors">
-            <LucideIcon name="ChevronLeft" size={20} /> 返回
-          </button>
+          <button onClick={onCancel} className="flex items-center gap-1 text-gray-500 mb-4 hover:text-pink-600 transition-colors"><LucideIcon name="ChevronLeft" size={20} /> 返回</button>
           <h2 className="text-2xl font-bold mb-6 text-gray-800 ml-2">編輯個人資料</h2>
-          
           <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-6 shadow-sm border border-pink-50 space-y-5">
-            <div className="flex justify-center mb-4">
-              <img src={formData.avatar} alt="預覽" className="w-20 h-20 rounded-full border-2 border-pink-100 object-cover shadow-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">姓名 / 暱稱</label>
-              <input required type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">大頭貼網址</label>
-              <input required type="url" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.avatar} onChange={e => setFormData({...formData, avatar: e.target.value})} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">專長標籤 (請以逗號分隔)</label>
-              <input type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} placeholder="例如: 空中瑜珈, 皮拉提斯" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">收款銀行帳號</label>
-              <input type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.bank_account} onChange={e => setFormData({...formData, bank_account: e.target.value})} placeholder="例如: 台新(812) 2888-1234-5678" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">教學經歷與簡介</label>
-              <textarea required className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl h-32 focus:outline-none focus:ring-2 focus:ring-pink-300"
-                     value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} />
-            </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-pink-400 to-purple-500 text-white font-bold text-lg py-3.5 rounded-xl mt-4 shadow-lg shadow-pink-200 active:scale-95 transition-transform">
-              儲存資料
-            </button>
+            <div className="flex justify-center mb-4"><img src={formData.avatar} alt="預覽" className="w-20 h-20 rounded-full border-2 border-pink-100 object-cover shadow-sm" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">姓名 / 暱稱</label><input required type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">大頭貼網址</label><input required type="url" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.avatar} onChange={e => setFormData({...formData, avatar: e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">專長標籤 (請以逗號分隔)</label><input type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} placeholder="例如: 空中瑜珈, 皮拉提斯" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">收款銀行帳號</label><input type="text" className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.bank_account} onChange={e => setFormData({...formData, bank_account: e.target.value})} placeholder="例如: 台新(812) 2888-1234-5678" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">教學經歷與簡介</label><textarea required className="w-full bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl h-32 focus:outline-none focus:ring-2 focus:ring-pink-300" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} /></div>
+            <button type="submit" className="w-full bg-gradient-to-r from-pink-400 to-purple-500 text-white font-bold text-lg py-3.5 rounded-xl mt-4 shadow-lg shadow-pink-200 active:scale-95 transition-transform">儲存資料</button>
           </form>
         </div>
       );
     }
 
-    //    const root = ReactDOM.createRoot(document.getElementById('root'));
+    const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
 </body>
